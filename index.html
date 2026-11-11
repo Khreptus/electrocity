@@ -16,8 +16,29 @@
 <link rel="preload" href="fonts/onest-cyrillic-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/lamp-off.webp" as="image">
 <link rel="stylesheet" href="css/app.css">
+<style>
+#pre{position:fixed;inset:0;z-index:100;background:#0F1012;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;padding:24px;transition:opacity .45s ease,visibility .45s;font-family:Onest,system-ui,sans-serif}
+#pre.hide{opacity:0;visibility:hidden}
+#pre .ic{position:relative;width:148px;height:148px}
+#pre svg{width:100%;height:100%;overflow:visible}
+#pre .glow{position:absolute;inset:-60%;border-radius:50%;background:radial-gradient(circle,rgba(231,183,126,.55),rgba(227,154,11,.18) 35%,transparent 65%);opacity:0;animation:preGlow 3s ease forwards}
+#pre .a{transform-origin:50% 50%;animation:preA 3s cubic-bezier(.2,.9,.25,1) forwards}
+#pre .w{transform-origin:50% 50%;animation:preW 3s cubic-bezier(.2,.9,.25,1) forwards}
+#pre .bolt{animation:preFlick 3s linear forwards}
+#pre p{color:#F3F4F1;font-size:17px;font-weight:600;line-height:24px;text-align:center;max-width:300px;opacity:0;transform:translateY(8px);animation:preText 3s ease forwards}
+@keyframes preA{0%{transform:translate(-70px,90px) rotate(-14deg);opacity:0}18%{opacity:1}36%{transform:translate(0,0) rotate(0)}100%{transform:none}}
+@keyframes preW{0%{transform:translate(70px,-90px) rotate(14deg);opacity:0}18%{opacity:1}36%{transform:translate(0,0) rotate(0)}40%{transform:translate(-3px,3px)}46%,100%{transform:none}}
+@keyframes preFlick{0%,36%{filter:brightness(.55)}40%{filter:brightness(1.6)}44%{filter:brightness(.6)}49%{filter:brightness(1.4)}53%{filter:brightness(.8)}60%,100%{filter:brightness(1)}}
+@keyframes preGlow{0%,38%{opacity:0;transform:scale(.6)}50%{opacity:1;transform:scale(1.05)}62%{opacity:.6}75%,100%{opacity:.75;transform:scale(1)}}
+@keyframes preText{0%,45%{opacity:0;transform:translateY(8px)}62%,100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#pre .a,#pre .w,#pre .bolt{animation:none}#pre .glow{animation:none;opacity:.7}#pre p{animation:none;opacity:1;transform:none}}
+</style>
 </head>
 <body>
+<div id="pre" role="status" aria-label="Завантаження">
+ <div class="ic"><div class="glow"></div><svg viewBox="90 50 212 294" aria-hidden="true"><g class="bolt"><path class="a" fill="#E39A0B" d="M186.355 233.221L98.3342 211.276C96.9085 210.92 96.1956 210.743 96.0282 210.206C95.8607 209.67 96.3458 209.118 97.316 208.015L229.732 57.4057C230.271 56.7923 230.54 56.4857 230.715 56.5769C230.889 56.6681 230.79 57.0643 230.592 57.8568L205.064 160.251C205.006 160.48 204.978 160.594 205.031 160.683C205.085 160.772 205.199 160.8 205.428 160.857L293.449 182.802C294.875 183.158 295.587 183.336 295.755 183.872C295.922 184.408 295.437 184.96 294.467 186.064L162.051 336.673C161.512 337.286 161.243 337.593 161.069 337.501C160.894 337.41 160.993 337.014 161.191 336.221L186.72 233.827C186.777 233.599 186.805 233.484 186.752 233.395C186.698 233.307 186.584 233.278 186.355 233.221Z"/><path class="w" fill="#F3F4F1" d="M186.026 233.139L98.3342 211.276C96.9085 210.92 96.1956 210.743 96.0282 210.206C95.8607 209.67 96.3458 209.118 97.316 208.015L229.732 57.4057L229.732 57.4056C230.271 56.7923 230.54 56.4857 230.715 56.5769C230.889 56.6681 230.79 57.0643 230.592 57.8568L205.064 160.251C205.006 160.48 204.978 160.594 205.031 160.683C205.085 160.772 205.199 160.8 205.428 160.857L280.83 179.656C286.671 181.113 289.591 181.841 289.484 182.719C289.376 183.597 286.366 183.597 280.347 183.597L280.346 183.597L174.645 183.597C174.349 183.597 174.2 183.597 174.125 183.694C174.05 183.791 174.087 183.934 174.161 184.222L186.631 232.529C186.724 232.892 186.771 233.073 186.671 233.174C186.571 233.275 186.389 233.23 186.026 233.139Z"/></g></svg></div>
+ <p>І без світла видно, що русня п***ри</p>
+</div>
 <div id="app"><section class="stage" data-state="loading" style="min-height:100dvh"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""></section></div>
 <noscript>Для роботи застосунку увімкніть JavaScript.</noscript>
 <script type="module" src="js/app.js"></script>

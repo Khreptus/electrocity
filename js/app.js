@@ -211,7 +211,7 @@ function band(title, back, backTo = 'home') {
 // ----- Онбординг -----
 function welcome() {
   return `<section class="stage" data-state="on" style="padding-bottom:72px"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt="">
-   <div style="height:200px"></div><h1 class="h-l" style="font-size:30px;line-height:36px">Знайте, коли буде <span style="color:var(--light)">світло</span></h1>
+   <div style="height:236px"></div><h1 class="h-l" style="font-size:30px;line-height:36px">Знайте, коли буде <span style="color:var(--light)">світло</span></h1>
    <p class="body-s" style="color:var(--stage-text-2);margin-top:12px">Графік відключень для вашої адреси по всій Україні — з офіційних джерел операторів.</p></section>
    <section class="sheet" style="gap:16px">
     ${[['map-pin', 'Черга за адресою — без пошуку в таблицях'], ['bell', 'Попередження перед відключенням'], ['home', 'Кілька адрес: дім, робота, батьки']].map(([i, t]) => `<div style="display:flex;gap:12px;align-items:center"><span class="lt" style="width:36px;height:36px;border-radius:12px;background:var(--surface);display:grid;place-items:center">${ic(i)}</span><span>${t}</span></div>`).join('')}
@@ -350,7 +350,13 @@ setInterval(() => { if (['home', 'detail', 'addresses'].includes(view) && !docum
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-render();
+
+// Прелоадер: анімація іконки 3 с, потім плавно зникає (застосунок рендериться під ним)
+const pre = document.getElementById('pre');
+render().finally(() => {
+  if (!pre) return;
+  setTimeout(() => { pre.classList.add('hide'); setTimeout(() => pre.remove(), 500); }, Math.max(0, 3000 - performance.now()));
+});
 
 // ---------- Миколаївська: каскад «дільниця → нас. пункт → вулиця → будинок» → черга ----------
 async function initMoe() {
