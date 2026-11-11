@@ -36,6 +36,18 @@ async function moeSettlements() {
   return moeNs;
 }
 
+// ---------- Хмельницькобленерго: довідник з офіційних xlsx-файлів (scripts/hoe-addr.mjs) ----------
+let hoeIdx = null; const hoeFiles = {};
+const hoeIndex = () => hoeIdx ||= fetch('data/addr/hoe/index.json').then(r => r.ok ? r.json() : null).catch(() => null);
+export const hoeCity = id => hoeFiles[id] ||= fetch(`data/addr/hoe/${id}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(e => { delete hoeFiles[id]; throw e; });
+// Черга для всієї вулиці (у файлі будинки не перелічені)
+export async function hoeStreetQueue(draft) {
+  if (!draft.hoeId || !draft.street) return null;
+  const hs = (await hoeCity(draft.hoeId))[draft.street];
+  const all = hs?.find(h => h[0] === '*');
+  return all && hs.length === 1 ? all[1].split(',') : null;
+}
+
 // ---------- OpenStreetMap (Photon) ----------
 let ctl = null;
 async function photon(q, extra) {
@@ -53,6 +65,11 @@ export function citySource(region) {
     return osmCities(region, q);
   };
   if (region.addressLookup === 'moe') return async q => rank(await moeSettlements(), q);
+  if (region.op === 'hoe') return async q => {
+    const d = await hoeIndex();
+    if (d?.items?.length) return rank(d.items.map(([label, sub, id]) => ({ label, sub, hoe: id })), q);
+    return osmCities(region, q);
+  };
   return q => osmCities(region, q);
 }
 async function osmCities(region, q) {
@@ -74,6 +91,7 @@ export function streetSource(region, draft) {
     let cache = null;
     return async q => { cache ||= (await moeAddr.streets(draft.nsId)).map(s => ({ label: s.nazstreet, id: s.idstreet })); return rank(cache, q); };
   }
+  if (region.op === 'hoe' && draft.hoeId) return async q => rank(Object.keys(await hoeCity(draft.hoeId)).map(label => ({ label })), q);
   return q => osmStreets(draft, q);
 }
 async function osmStreets(draft, q) {
@@ -102,6 +120,10 @@ export function houseSource(region, draft) {
     let cache = null;
     return async q => { cache ||= (await moeAddr.houses(draft.streetId)).map(d => ({ label: d.nazdom, id: d.iddom })); return rank(cache, q).slice(0, 40); };
   }
+  if (region.op === 'hoe' && draft.hoeId && draft.street) return async q => {
+    const hs = (await hoeCity(draft.hoeId))[draft.street] || [];
+    return rank(hs.filter(h => h[0] !== '*').map(([label, qs]) => ({ label, queues: qs.split(',') })), q).slice(0, 40);
+  };
   return null; // вводиться вручну
 }
 
