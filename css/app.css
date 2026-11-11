@@ -268,3 +268,4 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .sugg b{font-weight:700}
 .sugg small{font-size:12px;font-weight:500;color:var(--text-2)}
 .sugg .none{padding:14px 16px;font-size:14px;color:var(--text-2)}
+a.btn,a.li{text-decoration:none;color:inherit}a.btn.primary{color:var(--inverse-text)}

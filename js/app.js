@@ -203,6 +203,7 @@ function settings() {
   return `<div class="band"><span class="h-l">Налаштування</span></div><section class="sheet r32">
    <div class="over">Основне</div><div class="list">${li('notif', 'bell', 'Сповіщення', perm === 'granted' ? 'Дозволено' : perm === 'denied' ? 'Заборонено в системі' : 'Не налаштовано', '')}</div>
    <div class="over">Вигляд</div><div class="list">${li('theme', 'moon', 'Тема', null, th)}${li('noop', 'globe', 'Мова', null, 'Українська', '')}</div>
+   <div class="over">Поділитися</div><div class="list"><a class="li" href="install/"><span class="lt">${ic('share')}</span><span class="tx"><span class="tt">Сторінка встановлення</span><br><span class="st">Надішліть друзям — iPhone, Android, Mac</span></span>${ic('chevron-right', 'chev')}</a></div>
    <div class="over">Віджет</div><div class="list"><a class="li" href="widget/"><span class="lt">${ic('grid')}</span><span class="tx"><span class="tt">Віджет для iPhone</span><br><span class="st">Статус і таймер на головному екрані</span></span>${ic('chevron-right', 'chev')}</a></div>
    <div class="over">Дані</div><div class="list">${li('sources', 'shield', 'Джерела даних', 'Офіційні оператори')}${li('clearcache', 'database', 'Оновити графіки', 'Скинути збережені дані графіків', '', '')}</div>
    <div class="over">Про застосунок</div><div class="list">${li('noop', 'lock', 'Конфіденційність', 'Без акаунта. Адреси зберігаються лише на цьому пристрої', '', '')}${li('noop', 'info', 'Версія', null, '0.1 (бета)', '')}</div></section>`;
