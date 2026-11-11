@@ -57,6 +57,11 @@ export default {
       if (p === '/api/badge/installs') { const st = JSON.parse(await env.KV.get('stats') || '{"installs":0}');
         return json({ schemaVersion: 1, label: 'встановлень', message: String(st.installs), color: 'E39A0B', labelColor: '1B1B1B' }, 200, { 'Cache-Control': 'max-age=300' }); }
       if (p === '/api/status') return json({ ok: true, ...(JSON.parse(await env.KV.get('status') || '{}')) });
+      if (p === '/api/debug/dnem') { // тимчасова діагностика
+        const r = await fetch('https://www.dtek-dnem.com.ua/ua/shutdowns', { headers: { 'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'uk-UA,uk;q=0.9' } });
+        const t = await r.text();
+        return json({ status: r.status, len: t.length, server: r.headers.get('server'), cookies: r.headers.get('set-cookie'), title: (t.match(/<title>([^<]*)/) || [])[1], hasFact: t.includes('DisconSchedule.fact'), head: t.slice(0, 600) });
+      }
       if (p === '/api/tick') { // ручний запуск збору, не частіше разу на хвилину
         const lockKey = new Request('https://lock.local/tick'); const c = caches.default;
         if (await c.match(lockKey)) return json({ error: 'too soon' }, 429);
