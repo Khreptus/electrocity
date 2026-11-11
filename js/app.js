@@ -222,6 +222,12 @@ function welcome() {
     ${[['map-pin', 'Черга за адресою — без пошуку в таблицях'], ['bell', 'Попередження перед відключенням']].map(([i, t]) => `<div style="display:flex;gap:12px;align-items:center"><span style="width:32px;height:32px;border-radius:10px;background:var(--surface);display:grid;place-items:center;flex:none">${ic(i)}</span><span style="font-size:14px">${t}</span></div>`).join('')}
     <div style="flex:1"></div><div style="display:flex;flex-direction:column;gap:10px"><button class="btn primary" data-act="start">Налаштувати адресу</button><div class="cap3" style="text-align:center">Без реєстрації та номера телефону</div></div></section>`;
 }
+function manualReason(r) {
+  if (r.op === 'hoe') return 'Хмельницькобленерго захищає пошук за адресою капчею, тож автоматично визначити чергу неможливо. Вона вказана в особовому кабінеті або на hoe.com.ua → «Відключення за адресою».';
+  if (r.op.startsWith('dtek-')) return 'Автовизначення черги для ДТЕК з’явиться після підключення сервера (вже в плані). Поки що черга вказана на сайті ДТЕК у розділі «Відключення» за вашою адресою.';
+  if (r.addressLookup === 'moe') return 'Оберіть населений пункт, вулицю й будинок зі списку підказок — тоді черга визначиться автоматично.';
+  return 'Для цього оператора автоматичне визначення черги поки недоступне. Черга вказана в особовому кабінеті оператора або в рахунку.';
+}
 function steps(n) { return `<div class="steps">${[1, 2, 3, 4].map(i => `<i class="${i <= n ? 'a' : ''}"></i>`).join('')}</div><div class="cap3">Крок ${n} з 4</div>`; }
 function onboarding() {
   const back = S.addresses.length && view === 'ob-region' ? 'addresses' : null;
@@ -242,9 +248,9 @@ function onboarding() {
     <label class="field">${ic('search')}<input id="street" placeholder="Вулиця — почніть вводити" value="${esc(draft.street || '')}" autocomplete="off" enterkeyhint="next"></label>
     <label class="field">${ic('home')}<input id="house" placeholder="Номер будинку" value="${esc(draft.house || '')}" autocomplete="off" enterkeyhint="done"></label>
     <div id="addr-res"></div>
-    ${auto ? '' : `<div class="banner info">${ic('info')}<div><div class="bt">Пошук черги за адресою для цього оператора ще не підключений</div><div class="bb">Адресу збережемо, а чергу оберіть на наступному кроці — вона вказана в особовому кабінеті оператора або в рахунку.</div></div></div>`}
+    ${auto ? '' : `<div class="banner warn">${ic('alert')}<div><div class="bt">Чергу доведеться обрати вручну</div><div class="bb">${manualReason(r)}</div></div></div>`}
     <div style="flex:1"></div><button class="btn primary" id="addr-next" data-act="address-next">${auto ? 'Обрати чергу вручну' : 'Обрати чергу'}</button></section>`; }
-  if (view === 'ob-queue') { const ql = queueList(r.queues); return bk(draft.method === 'address' ? 'ob-address' : 'ob-method') + `<section class="sheet r32">${steps(4)}<div class="h-l">Оберіть чергу</div><div class="body-s">Черги ${esc(r.opName)}</div>
+  if (view === 'ob-queue') { const ql = queueList(r.queues); return bk(draft.method === 'address' ? 'ob-address' : 'ob-method') + `<section class="sheet r32">${steps(4)}<div class="h-l">Оберіть чергу</div>${draft.method === 'address' && !draft.autoQueue && !draft.editOf ? `<div class="banner warn">${ic('alert')}<div><div class="bt">Не вдалося визначити чергу автоматично</div><div class="bb">Оберіть її вручну. ${esc(manualReason(r))}</div></div></div>` : ''}<div class="body-s">Черги ${esc(r.opName)}</div>
     <div class="qgrid ${r.queues.type === 'plain' ? 'c3' : ''}">${ql.map(q => `<button class="qcell" data-act="queue" data-v="${q}" aria-pressed="${draft.queue === q}">${q}</button>`).join('')}</div>
     <div style="flex:1"></div><button class="btn primary" data-act="queue-next" ${draft.queue ? '' : 'disabled'}>${draft.queue ? 'Обрати ' + draft.queue : 'Оберіть чергу'}</button></section>`; }
   if (view === 'ob-confirm') return bk('ob-queue') + `<section class="sheet r32"><div class="h-l">Все готово</div>
