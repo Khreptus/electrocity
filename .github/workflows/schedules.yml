@@ -1,7 +1,7 @@
 name: Графіки відключень
 
 on:
-  # Графіки тепер збирає Cloudflare Worker (cron щохвилини). Лише ручний запуск.
+  # Графіки тепер збирає Cloudflare Worker (cron раз на 15 хв). Лише ручний запуск.
   workflow_dispatch:
 
 permissions:

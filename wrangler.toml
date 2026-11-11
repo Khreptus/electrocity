@@ -7,7 +7,7 @@ directory = "."
 binding = "ASSETS"
 
 [triggers]
-crons = ["* * * * *"]
+crons = ["*/15 * * * *"]
 
 [[kv_namespaces]]
 binding = "KV"

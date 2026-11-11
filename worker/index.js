@@ -1,5 +1,5 @@
 // Electrocity — сервер на Cloudflare Workers (безкоштовний тариф).
-// • щохвилини збирає графіки з офіційних джерел → KV
+// • раз на 15 хв збирає графіки з офіційних джерел → KV
 // • відправляє Web Push: зміни графіка, графік на завтра, нагадування перед відключенням/відновленням
 // • проксі пошуку черги за адресою для ДТЕК (потрібні CSRF + cookie сайту)
 // • усе інше — статичні файли застосунку (ASSETS)
@@ -78,7 +78,7 @@ export default {
   },
 };
 
-// ---------- збір + сповіщення (щохвилини) ----------
+// ---------- збір + сповіщення (раз на 15 хв) ----------
 async function tick(env, manual = false) {
   const now = kyiv();
   const status = {};
@@ -165,9 +165,9 @@ function reminder(data, a, lead, now, t) {
     if (all[k][2] === 'unknown') return null;
     if (isOff(all[k][2]) !== curOff) {
       const left = all[k][0] - now.min;
-      if (left !== lead) return null;
-      if (!curOff && t.before !== false) { const end = all.slice(k).find(s => !isOff(s[2])); return { title: `${a.name} · відключення через ${lead} хв`, body: `За графіком ${hm(all[k][0])}–${end ? hm(end[0]) : '…'} · черга ${a.queue}`, tag: `before-${a.op}-${a.queue}` }; }
-      if (curOff && t.restore !== false) return { title: `${a.name} · світло через ${lead} хв`, body: `За графіком відновлення о ${hm(all[k][0])} · черга ${a.queue}`, tag: `restore-${a.op}-${a.queue}` };
+      if (left > lead || left <= lead - 15) return null; // збір раз на 15 хв — вікно 15 хв
+      if (!curOff && t.before !== false) { const end = all.slice(k).find(s => !isOff(s[2])); return { title: `${a.name} · відключення через ${left} хв`, body: `За графіком ${hm(all[k][0])}–${end ? hm(end[0]) : '…'} · черга ${a.queue}`, tag: `before-${a.op}-${a.queue}` }; }
+      if (curOff && t.restore !== false) return { title: `${a.name} · світло через ${left} хв`, body: `За графіком відновлення о ${hm(all[k][0])} · черга ${a.queue}`, tag: `restore-${a.op}-${a.queue}` };
       return null;
     }
   }
