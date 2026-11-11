@@ -116,7 +116,7 @@ export function attachTypeahead(input, source, onPick, { minChars = 1, emptyText
   const box = document.createElement('div'); box.className = 'sugg'; box.setAttribute('role', 'listbox'); box.hidden = true;
   input.closest('.field').after(box);
   input.setAttribute('role', 'combobox'); input.setAttribute('aria-autocomplete', 'list');
-  let items = [], active = -1, timer = null, seq = 0;
+  let items = [], active = -1, timer = null, seq = 0, picked = false;
   const draw = () => {
     box.innerHTML = items.length ? items.map((it, i) => `<button type="button" role="option" class="${i === active ? 'on' : ''}" data-i="${i}"><span>${hl(it.label, input.value.trim())}</span>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</button>`).join('')
       : `<div class="none">${emptyText}</div>`;
@@ -129,8 +129,8 @@ export function attachTypeahead(input, source, onPick, { minChars = 1, emptyText
     try { const r = await source(q); if (my !== seq) return; items = r; active = -1; draw(); }
     catch (e) { if (e.name !== 'AbortError' && my === seq) { box.innerHTML = '<div class="none">Не вдалося завантажити підказки. Введіть вручну.</div>'; } }
   };
-  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 180); });
-  input.addEventListener('focus', () => { if (minChars === 0 || input.value.trim()) run(); });
+  input.addEventListener('input', () => { picked = false; clearTimeout(timer); timer = setTimeout(run, 180); });
+  input.addEventListener('focus', () => { if (!picked && (minChars === 0 || input.value.trim())) run(); });
   input.addEventListener('keydown', e => {
     if (box.hidden || !items.length) return;
     if (e.key === 'ArrowDown') { active = Math.min(items.length - 1, active + 1); draw(); e.preventDefault(); }
@@ -138,7 +138,7 @@ export function attachTypeahead(input, source, onPick, { minChars = 1, emptyText
     if (e.key === 'Enter' && active >= 0) { pick(items[active]); e.preventDefault(); }
     if (e.key === 'Escape') box.hidden = true;
   });
-  const pick = it => { input.value = it.label; box.hidden = true; onPick(it); };
+  const pick = it => { clearTimeout(timer); seq++; picked = true; input.value = it.label; box.hidden = true; box.innerHTML = ''; onPick(it); };
   box.addEventListener('mousedown', e => e.preventDefault());
   box.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) pick(items[+b.dataset.i]); });
   input.addEventListener('blur', () => setTimeout(() => { box.hidden = true; }, 150));

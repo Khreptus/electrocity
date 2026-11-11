@@ -262,6 +262,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .field.sel select{flex:1;border:0;background:none;font:inherit;font-size:16px;color:var(--text);outline:none;min-width:0;-webkit-appearance:none;appearance:none}
 .field.sel select:disabled{color:var(--text-3)}
 .sugg{background:var(--surface);border-radius:16px;box-shadow:var(--shadow-float);margin-top:-6px;max-height:300px;overflow:auto;display:flex;flex-direction:column;position:relative;z-index:5}
+.sugg[hidden]{display:none}
 .sugg button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 16px;text-align:left;font-size:16px;width:100%}
 .sugg button+button{border-top:1px solid var(--border)}
 .sugg button.on,.sugg button:hover{background:var(--surface-2)}
