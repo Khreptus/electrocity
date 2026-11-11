@@ -1,5 +1,5 @@
 // Service worker: оболонка — cache-first, графіки — network-first з резервом у кеші.
-const VERSION = 'v0.3.2';
+const VERSION = 'v0.3.3';
 const SHELL = `shell-${VERSION}`;
 const DATA = 'data-v1';
 const FILES = [
@@ -17,8 +17,9 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (url.pathname.includes('/data/')) {
-    e.respondWith(fetch(e.request).then(r => { if (r.ok) { const c = r.clone(); caches.open(DATA).then(x => x.put(e.request, c)); } return r; })
-      .catch(() => caches.match(e.request).then(r => r || new Response('', { status: 404 }))));
+    const key = url.origin + url.pathname; // без ?m=… — одна копія на файл
+    e.respondWith(fetch(e.request).then(r => { if (r.ok) { const c = r.clone(); caches.open(DATA).then(x => x.put(key, c)); } return r; })
+      .catch(() => caches.match(key).then(r => r || new Response('', { status: 404 }))));
     return;
   }
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request)));

@@ -63,16 +63,20 @@ export const isLive = op => LIVE_OPS.has(op);
 // Формат data/schedules/<op>.json:
 // { operator, name, source:{url, kind:'official'|'unofficial'}, updatedAt, days:{ 'YYYY-MM-DD': { '3.2': [[startMin,endMin,'on'|'off'|'possible'|'unknown'|'emergency'], …] } } }
 const cache = new Map();
+const TTL = 3 * 60 * 1000; // перевіряємо оновлення кожні 3 хв
 export async function loadSchedule(op) {
-  if (cache.has(op)) return cache.get(op);
+  const c = cache.get(op);
+  if (c && Date.now() - c.fetchedAt < TTL) return c.data;
   let data = null;
   if (op === 'moe') { try { data = await moeLive(); } catch { /* резерв — файл */ } }
   if (!data) try {
-    const r = await fetch(`data/schedules/${op}.json`, { cache: 'no-cache' });
+    // ?m=… обходить кеш CDN GitHub Pages (до 10 хв)
+    const r = await fetch(`data/schedules/${op}.json?m=${Math.floor(Date.now() / 60000)}`, { cache: 'no-store' });
     if (r.ok) data = await r.json();
   } catch { /* офлайн або немає файлу */ }
+  if (!data && c && !c.data.demo) return c.data; // офлайн — лишаємо останні отримані дані
   if (!data || !data.days || !Object.keys(data.days).length) data = isLive(op) && data ? data : demoSchedule(op);
-  cache.set(op, data);
+  if (!data.demo || !c) cache.set(op, { data, fetchedAt: Date.now() });
   return data;
 }
 export function clearScheduleCache() { cache.clear(); }
