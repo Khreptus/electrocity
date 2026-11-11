@@ -259,3 +259,5 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .side .chip{background:var(--stage-tile);color:var(--stage-text)}
 .side .cap{color:var(--stage-text-2)}
 @media (min-width:1024px){.stage,.sheet{padding-left:max(20px,calc((100% - 760px)/2));padding-right:max(20px,calc((100% - 760px)/2))}}
+.field.sel select{flex:1;border:0;background:none;font:inherit;font-size:16px;color:var(--text);outline:none;min-width:0;-webkit-appearance:none;appearance:none}
+.field.sel select:disabled{color:var(--text-3)}

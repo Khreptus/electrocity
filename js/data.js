@@ -9,7 +9,7 @@ export const REGIONS = [
   { id: 'kyiv', name: 'Київська', center: 'Біла Церква', op: 'dtek-krem', opName: 'ДТЕК Київські регіональні електромережі', queues: Q6x2 },
   { id: 'vinnytsia', name: 'Вінницька', center: 'Вінниця', op: 'voe', opName: 'Вінницяобленерго', queues: Q6x2 },
   { id: 'volyn', name: 'Волинська', center: 'Луцьк', op: 'voe-volyn', opName: 'Волиньобленерго', queues: Q6x2 },
-  { id: 'dnipro', name: 'Дніпропетровська', center: 'Дніпро', op: 'dtek-dnem', opName: 'ДТЕК Дніпровські електромережі', queues: Q6x2 },
+  { id: 'dnipro', name: 'Дніпропетровська', center: 'Дніпро', cities: ['Дніпро', 'Кривий Ріг', 'Кам’янське', 'Нікополь', 'Павлоград', 'Новомосковськ'], op: 'dtek-dnem', opName: 'ДТЕК Дніпровські електромережі', queues: Q6x2 },
   { id: 'donetsk', name: 'Донецька', center: 'Краматорськ', op: 'dtek-dem', opName: 'ДТЕК Донецькі електромережі', queues: Q6x2 },
   { id: 'zhytomyr', name: 'Житомирська', center: 'Житомир', op: 'zhoe', opName: 'Житомиробленерго', queues: Q6x2 },
   { id: 'zakarpattia', name: 'Закарпатська', center: 'Ужгород', op: 'zakoe', opName: 'Закарпаттяобленерго', queues: Q6x2 },
@@ -18,15 +18,15 @@ export const REGIONS = [
   { id: 'kirovohrad', name: 'Кіровоградська', center: 'Кропивницький', op: 'koe', opName: 'Кіровоградобленерго', queues: Q6x2 },
   { id: 'luhansk', name: 'Луганська', center: 'Сєвєродонецьк', op: 'leo', opName: 'Луганське енергетичне об’єднання', queues: Q6 },
   { id: 'lviv', name: 'Львівська', center: 'Львів', op: 'loe', opName: 'Львівобленерго', queues: Q6x2 },
-  { id: 'mykolaiv', name: 'Миколаївська', center: 'Миколаїв', op: 'moe', opName: 'Миколаївобленерго', queues: Q6x2 },
-  { id: 'odesa', name: 'Одеська', center: 'Одеса', op: 'dtek-oem', opName: 'ДТЕК Одеські електромережі', queues: Q6x2 },
+  { id: 'mykolaiv', name: 'Миколаївська', center: 'Миколаїв', addressLookup: 'moe', op: 'moe', opName: 'Миколаївобленерго', queues: Q6x2 },
+  { id: 'odesa', name: 'Одеська', center: 'Одеса', cities: ['Одеса', 'Ізмаїл', 'Чорноморськ', 'Білгород-Дністровський', 'Подільськ', 'Южне'], op: 'dtek-oem', opName: 'ДТЕК Одеські електромережі', queues: Q6x2 },
   { id: 'poltava', name: 'Полтавська', center: 'Полтава', op: 'poe-poltava', opName: 'Полтаваобленерго', queues: Q6x2 },
   { id: 'rivne', name: 'Рівненська', center: 'Рівне', op: 'roe', opName: 'Рівнеобленерго', queues: Q6x2 },
   { id: 'sumy', name: 'Сумська', center: 'Суми', op: 'soe', opName: 'Сумиобленерго', queues: Q6x2 },
   { id: 'ternopil', name: 'Тернопільська', center: 'Тернопіль', op: 'toe', opName: 'Тернопільобленерго', queues: Q6x2 },
   { id: 'kharkiv', name: 'Харківська', center: 'Харків', op: 'khoe', opName: 'Харківобленерго', queues: Q6x2 },
   { id: 'kherson', name: 'Херсонська', center: 'Херсон', op: 'khe', opName: 'Херсонобленерго', queues: Q6x2 },
-  { id: 'khmelnytskyi', name: 'Хмельницька', center: 'Хмельницький', op: 'hoe', opName: 'Хмельницькобленерго', queues: Q6x2 },
+  { id: 'khmelnytskyi', name: 'Хмельницька', center: 'Хмельницький', cities: ['Хмельницький', 'Кам’янець-Подільський', 'Шепетівка', 'Нетішин', 'Старокостянтинів', 'Славута'], op: 'hoe', opName: 'Хмельницькобленерго', queues: Q6x2 },
   { id: 'cherkasy', name: 'Черкаська', center: 'Черкаси', op: 'choe', opName: 'Черкасиобленерго', queues: Q6x2 },
   { id: 'chernivtsi', name: 'Чернівецька', center: 'Чернівці', op: 'chernoe', opName: 'Чернівціобленерго', queues: Q6x2 },
   { id: 'chernihiv', name: 'Чернігівська', center: 'Чернігів', op: 'cheroe', opName: 'Чернігівобленерго', queues: Q6x2 },
@@ -55,6 +55,10 @@ export function addDays(dateStr, n) {
   return d.toISOString().slice(0, 10);
 }
 
+// Оператори з підключеними офіційними джерелами
+export const LIVE_OPS = new Set(['dtek-oem', 'dtek-dnem', 'hoe', 'moe']);
+export const isLive = op => LIVE_OPS.has(op);
+
 // ---------- Завантаження графіка ----------
 // Формат data/schedules/<op>.json:
 // { operator, name, source:{url, kind:'official'|'unofficial'}, updatedAt, days:{ 'YYYY-MM-DD': { '3.2': [[startMin,endMin,'on'|'off'|'possible'|'unknown'|'emergency'], …] } } }
@@ -62,11 +66,12 @@ const cache = new Map();
 export async function loadSchedule(op) {
   if (cache.has(op)) return cache.get(op);
   let data = null;
-  try {
+  if (op === 'moe') { try { data = await moeLive(); } catch { /* резерв — файл */ } }
+  if (!data) try {
     const r = await fetch(`data/schedules/${op}.json`, { cache: 'no-cache' });
     if (r.ok) data = await r.json();
   } catch { /* офлайн або немає файлу */ }
-  if (!data) data = demoSchedule(op);
+  if (!data || !data.days || !Object.keys(data.days).length) data = isLive(op) && data ? data : demoSchedule(op);
   cache.set(op, data);
   return data;
 }
@@ -135,3 +140,29 @@ export function nextChange(data, date, queue, min) {
 export function upcomingEvents(segs, min) {
   return (segs || []).filter(s => s[1] > min);
 }
+
+// ---------- Миколаївобленерго: відкритий API з CORS (живі дані прямо в браузері) ----------
+const MOE = 'https://off.energy.mk.ua/api';
+const j = u => fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+const kyivDateOf = d => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+async function moeLive() {
+  const [ts, queues, active] = await Promise.all([j(`${MOE}/schedule/time-series`), j(`${MOE}/outage-queue/by-type/3`), j(`${MOE}/v2/schedule/active`)]);
+  const slotOf = Object.fromEntries(ts.map(t => { const [h, m] = t.start.split(':').map(Number); return [t.id, (h * 60 + m) / 30]; }));
+  const qName = Object.fromEntries(queues.map(q => [q.id, q.name]));
+  const days = {};
+  for (const sch of active) {
+    const date = kyivDateOf(new Date(new Date(sch.from).getTime() + 2 * 3600e3));
+    const grid = Object.fromEntries(queues.map(q => [q.name, Array(48).fill('on')]));
+    for (const s of sch.series) { const q = qName[s.outage_queue_id], i = slotOf[s.time_series_id]; if (q && i != null) grid[q][i] = s.type === 'OFF' ? 'off' : s.type === 'PROBABLY_OFF' ? 'possible' : grid[q][i]; }
+    days[date] = Object.fromEntries(Object.entries(grid).map(([q, sl]) => [q, merge(sl.map((st, i) => [i * 30, i * 30 + 30, st]))]));
+  }
+  return { operator: 'moe', name: 'Миколаївобленерго', live: true, source: { url: 'https://off.energy.mk.ua/', kind: 'official' }, updatedAt: new Date().toISOString(), days };
+}
+// Пошук черги за адресою (Миколаївська обл.)
+export const moeAddr = {
+  filii: () => j(`${MOE}/addr/filii`),
+  ns: id => j(`${MOE}/addr/filii/${id}/ns`),
+  streets: id => j(`${MOE}/addr/ns/${id}/street`),
+  houses: id => j(`${MOE}/addr/street/${id}/dom`),
+  queue: id => j(`${MOE}/addr/dom/${id}/outage-queue`),
+};

@@ -1,5 +1,5 @@
 import { ic, STATE_ICON } from './icons.js';
-import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents } from './data.js';
+import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr } from './data.js';
 
 // ---------- Стан ----------
 const KEY = 'svitlo.v1';
@@ -45,6 +45,7 @@ async function render() {
   else if (view === 'settings') html = settings();
   const side = tabs || view === 'detail' ? await sidebar() : '';
   $app.innerHTML = side + `<div class="desk-wrap"><main class="view ${tabs ? '' : 'no-tabs'}">${html}</main></div>` + (tabs ? tabbar() : '');
+  if (view === 'ob-address' && draft?.regionId && region(draft.regionId).addressLookup === 'moe') initMoe();
   document.title = view === 'home' && cur() ? `${cur().name} · Світло` : 'Світло — графік відключень';
 }
 
@@ -119,8 +120,9 @@ function evRow(s, min, isToday) {
 }
 function sourceLine(data, a) {
   if (data.demo) return `<div class="source warn">${ic('info')}Демо-дані · джерело ${esc(region(a.regionId)?.opName)} ще не підключене</div>`;
-  const t = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
-  return `<a class="source ok" href="${esc(data.source?.url || '#')}" target="_blank" rel="noopener">${ic('shield')}${esc(data.name || region(a.regionId)?.opName)} · оновлено ${t} ${ic('external')}</a>`;
+  const t = data.updatedAt ? new Date(data.updatedAt).toLocaleString('uk-UA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
+  const when = data.live ? 'дані в реальному часі' : data.publishedAt ? `опубліковано ${esc(data.publishedAt)}` : t ? `оновлено ${t}` : '';
+  return `<a class="source ok" href="${esc(data.source?.url || '#')}" target="_blank" rel="noopener">${ic('shield')}${esc(data.name || region(a.regionId)?.opName)} · ${when} ${ic('external')}</a>`;
 }
 function banners(data) {
   let b = '';
@@ -225,17 +227,22 @@ function onboarding() {
     <div class="list" id="rlist">${REGIONS.filter(x => !draft.q || x.name.toLowerCase().includes(draft.q.toLowerCase())).map(x => `<button class="li" data-act="region" data-id="${x.id}"><span class="tx"><span class="tt">${x.name}</span><br><span class="st">${x.opName}</span></span>${ic('chevron-right', 'chev')}</button>`).join('')}</div></section>`;
   if (view === 'ob-city') return bk('ob-region') + `<section class="sheet r32">${steps(2)}<div class="cap">${esc(r.name)} · ${esc(r.opName)}</div>
     <label class="field">${ic('search')}<input id="city" placeholder="Назва міста чи села" value="${esc(draft.city || '')}" autocomplete="off"></label>
-    <div class="list"><button class="li" data-act="city" data-v="${esc(r.center)}"><span class="lt">${ic('map-pin')}</span><span class="tx"><span class="tt">${esc(r.center)}</span><br><span class="st">обласний центр</span></span></button></div>
-    <div class="body-s">Повний довідник населених пунктів підключимо разом із джерелами оператора. Поки введіть назву вручну.</div>
+    <div class="list">${(r.cities || [r.center]).map(c => `<button class="li" data-act="city" data-v="${esc(c)}"><span class="lt">${ic('map-pin')}</span><span class="tx"><span class="tt">${esc(c)}</span></span>${ic('chevron-right', 'chev')}</button>`).join('')}</div>
+    <div class="body-s">Немає у списку? Введіть назву вручну.</div>
     <div style="flex:1"></div><button class="btn primary" data-act="city-next">Продовжити</button></section>`;
   if (view === 'ob-method') return bk('ob-city') + `<section class="sheet r32">${steps(3)}<div class="h-l">Як визначити ваш графік?</div>
     <button class="opt" data-act="method" data-v="address" aria-pressed="${draft.method === 'address'}"><span class="ot">${ic('map-pin')}</span><span><span class="h-s">За адресою</span><br><span class="body-s">Вкажіть вулицю й будинок — чергу визначимо автоматично, щойно оператор це підтримає</span></span></button>
     <button class="opt" data-act="method" data-v="queue" aria-pressed="${draft.method === 'queue'}"><span class="ot">${ic('grid')}</span><span><span class="h-s">Я знаю свою чергу</span><br><span class="body-s">Оберіть чергу або підчергу зі списку оператора</span></span></button>
     <div style="flex:1"></div><button class="btn primary" data-act="method-next">Продовжити</button></section>`;
+  if (view === 'ob-address' && r.addressLookup === 'moe') return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(r.opName)} · пошук черги за адресою</div>
+    ${[['m-fil', 'Дільниця'], ['m-ns', 'Населений пункт'], ['m-st', 'Вулиця'], ['m-dom', 'Будинок']].map(([id, l]) => `<label class="field sel"><span class="cap3" style="width:96px">${l}</span><select id="${id}" disabled><option>Завантаження…</option></select></label>`).join('')}
+    <div id="m-res"></div>
+    <button class="link" data-act="method" data-v="queue" style="align-self:flex-start">Обрати чергу вручну ${ic('chevron-right')}</button>
+    <div style="flex:1"></div><button class="btn primary" id="m-next" data-act="moe-next" disabled>Продовжити</button></section>`;
   if (view === 'ob-address') return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
     <label class="field">${ic('search')}<input id="street" placeholder="Вулиця" value="${esc(draft.street || '')}" autocomplete="street-address"></label>
     <label class="field">${ic('home')}<input id="house" placeholder="Будинок" value="${esc(draft.house || '')}" inputmode="text"></label>
-    <div class="banner info">${ic('info')}<div><div class="bt">Автовизначення черги ще не підключене</div><div class="bb">Адресу збережемо, а чергу поки оберіть вручну — вона вказана в особовому кабінеті оператора.</div></div></div>
+    <div class="banner info">${ic('info')}<div><div class="bt">Пошук черги за адресою для цього оператора ще не підключений</div><div class="bb">Адресу збережемо, а чергу оберіть вручну — вона вказана в особовому кабінеті оператора або в рахунку.</div></div></div>
     <div style="flex:1"></div><button class="btn primary" data-act="address-next">Обрати чергу</button></section>`;
   if (view === 'ob-queue') { const ql = queueList(r.queues); return bk(draft.method === 'address' ? 'ob-address' : 'ob-method') + `<section class="sheet r32">${steps(4)}<div class="h-l">Оберіть чергу</div><div class="body-s">Черги ${esc(r.opName)}</div>
     <div class="qgrid ${r.queues.type === 'plain' ? 'c3' : ''}">${ql.map(q => `<button class="qcell" data-act="queue" data-v="${q}" aria-pressed="${draft.queue === q}">${q}</button>`).join('')}</div>
@@ -275,7 +282,7 @@ function themeSheet() {
 function sourcesSheet() {
   const ops = [...new Set(S.addresses.map(a => a.regionId))].map(region);
   openSheet(`<div class="h-s" style="font-size:22px">Джерела даних</div><div class="body-s">Пріоритет — офіційні дані операторів. Неофіційні повідомлення ніколи не змішуються з графіком без позначки.</div>
-   ${ops.map(r => `<div class="card" style="box-shadow:none;background:var(--surface-2)"><div class="h-s">${esc(r.opName)}</div><div class="cap">Підключення джерела — у роботі. Зараз показуємо демо-дані.</div></div>`).join('') || '<div class="body-s">Додайте адресу, щоб побачити джерела.</div>'}`);
+   ${ops.map(r => `<div class="card" style="box-shadow:none;background:var(--surface-2)"><div class="h-s">${esc(r.opName)}</div><div class="source ${isLive(r.op) ? 'ok' : 'warn'}">${ic(isLive(r.op) ? 'shield' : 'info')}${isLive(r.op) ? 'Офіційне джерело підключено' : 'Джерело ще не підключене — показуємо демо-дані'}</div></div>`).join('') || '<div class="body-s">Додайте адресу, щоб побачити джерела.</div>'}`);
 }
 async function notifSheet() {
   const sup = 'Notification' in window;
@@ -305,7 +312,8 @@ document.addEventListener('click', async e => {
     case 'region': draft.regionId = t.dataset.id; draft.city = ''; draft.queue = null; view = 'ob-city'; render(); break;
     case 'city': draft.city = t.dataset.v; view = 'ob-method'; render(); break;
     case 'city-next': { const v = document.getElementById('city').value.trim(); if (!v) { document.getElementById('city').focus(); break; } draft.city = v; view = 'ob-method'; render(); break; }
-    case 'method': draft.method = t.dataset.v; render(); break;
+    case 'method': draft.method = t.dataset.v; if (view === 'ob-address') view = 'ob-queue'; render(); break;
+    case 'moe-next': view = 'ob-confirm'; render(); break;
     case 'method-next': view = draft.method === 'address' ? 'ob-address' : 'ob-queue'; render(); break;
     case 'address-next': draft.street = document.getElementById('street').value.trim(); draft.house = document.getElementById('house').value.trim(); view = 'ob-queue'; render(); break;
     case 'queue': draft.queue = t.dataset.v; render(); break;
@@ -343,3 +351,24 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) rend
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 render();
+
+// ---------- Миколаївська: каскад «дільниця → нас. пункт → вулиця → будинок» → черга ----------
+async function initMoe() {
+  const $ = id => document.getElementById(id);
+  const fill = (el, items, idKey, nameKey, ph) => { el.innerHTML = `<option value="">${ph}</option>` + items.sort((a, b) => String(a[nameKey]).localeCompare(String(b[nameKey]), 'uk', { numeric: true })).map(x => `<option value="${x[idKey]}">${esc(x[nameKey])}</option>`).join(''); el.disabled = false; };
+  const reset = (...ids) => ids.forEach(id => { const e = $(id); e.innerHTML = '<option value="">—</option>'; e.disabled = true; });
+  const res = $('m-res'), next = $('m-next');
+  const fail = () => { res.innerHTML = `<div class="banner err">${ic('alert')}<div><div class="bt">Сервіс оператора не відповідає</div><div class="bb">Спробуйте ще раз або оберіть чергу вручну.</div></div></div>`; };
+  try { fill($('m-fil'), await moeAddr.filii(), 'idfilial', 'fullname', 'Оберіть дільницю'); reset('m-ns', 'm-st', 'm-dom'); } catch { return fail(); }
+  $('m-fil').onchange = async e => { reset('m-ns', 'm-st', 'm-dom'); res.innerHTML = ''; next.disabled = true; if (!e.target.value) return; try { fill($('m-ns'), await moeAddr.ns(e.target.value), 'idnaspunkt', 'naznaspunkt', 'Оберіть населений пункт'); } catch { fail(); } };
+  $('m-ns').onchange = async e => { reset('m-st', 'm-dom'); res.innerHTML = ''; next.disabled = true; if (!e.target.value) return; draft.city = e.target.selectedOptions[0].text; try { fill($('m-st'), await moeAddr.streets(e.target.value), 'idstreet', 'nazstreet', 'Оберіть вулицю'); } catch { fail(); } };
+  $('m-st').onchange = async e => { reset('m-dom'); res.innerHTML = ''; next.disabled = true; if (!e.target.value) return; draft.street = e.target.selectedOptions[0].text; try { fill($('m-dom'), await moeAddr.houses(e.target.value), 'iddom', 'nazdom', 'Оберіть будинок'); } catch { fail(); } };
+  $('m-dom').onchange = async e => { res.innerHTML = ''; next.disabled = true; if (!e.target.value) return; draft.house = e.target.selectedOptions[0].text;
+    res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Шукаємо чергу для адреси…</div></div>`;
+    try { const q = await moeAddr.queue(e.target.value); const g = q.find(x => x.outageType?.name === 'ГПВ') || q[0];
+      if (!g) { res.innerHTML = `<div class="banner warn">${ic('alert')}<div><div class="bt">Чергу не вдалося визначити</div><div class="bb">Оператор не повертає чергу для цієї адреси. Оберіть її вручну.</div></div></div>`; return; }
+      draft.queue = g.outage.name;
+      res.innerHTML = `<div class="card" style="background:var(--on-soft);box-shadow:none;gap:8px"><div style="display:flex;gap:10px;align-items:center;font-weight:600;color:var(--on-ink)">${ic('check')}Вашу адресу знайдено</div><div style="display:flex;gap:8px;align-items:baseline"><span class="body-s">Черга</span><span class="mono" style="font-size:20px;font-weight:600">${esc(draft.queue)}</span></div><div class="source ok">${ic('shield')}Визначено за даними Миколаївобленерго</div></div>`;
+      next.disabled = false; next.textContent = 'Продовжити';
+    } catch { fail(); } };
+}
