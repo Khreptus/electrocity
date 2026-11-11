@@ -163,6 +163,8 @@ for (const src of SOURCES.filter(s => !only || s.op === only)) {
     // updatedAt змінюємо лише коли змінились самі дані — щоб не робити зайвих комітів
     const same = prev && JSON.stringify(prev.days) === JSON.stringify(data.days) && prev.publishedAt === data.publishedAt;
     data.updatedAt = same ? prev.updatedAt : new Date().toISOString();
+    // checkedAt — коли востаннє успішно перевірили (раз на 3 год, щоб не комітити щоразу)
+    data.checkedAt = same && prev.checkedAt && Date.now() - Date.parse(prev.checkedAt) < 3 * 3600e3 ? prev.checkedAt : new Date().toISOString();
     await writeFile(file, JSON.stringify(data));
     console.log(`✓ ${src.op}: ${Object.keys(data.days).join(', ') || 'немає днів'}${same ? ' (без змін)' : ''}`);
   } catch (e) { failed++; if (e.message === 'NEED_BROWSER') needBrowser.push(src.op); console.error(`✗ ${src.op}: ${e.message}`); }

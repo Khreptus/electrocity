@@ -74,7 +74,18 @@ export function parseMoe(ts, queues, active) {
 const MOE = 'https://off.energy.mk.ua/api';
 export const SOURCES = [
   { op: 'dtek-oem', fetch: async get => ({ operator: 'dtek-oem', name: 'ДТЕК Одеські електромережі', source: { url: 'https://www.dtek-oem.com.ua/ua/shutdowns', kind: 'official' }, ...parseDtek(await get('https://www.dtek-oem.com.ua/ua/shutdowns')) }) },
-  { op: 'dtek-dnem', fetch: async get => ({ operator: 'dtek-dnem', name: 'ДТЕК Дніпровські електромережі', source: { url: 'https://www.dtek-dnem.com.ua/ua/shutdowns', kind: 'official' }, ...parseDtek(await get('https://www.dtek-dnem.com.ua/ua/shutdowns')) }) },
+  // Сайт ДТЕК Дніпро закритий Incapsula для серверів Cloudflare. Графік з того ж офіційного сайту
+  // збирає GitHub Actions (раз на 15 хв) у data/schedules/dtek-dnem.json — беремо готовий файл.
+  { op: 'dtek-dnem', fetch: async get => {
+    const meta = { operator: 'dtek-dnem', name: 'ДТЕК Дніпровські електромережі', source: { url: 'https://www.dtek-dnem.com.ua/ua/shutdowns', kind: 'official' } };
+    try { return { ...meta, ...parseDtek(await get('https://www.dtek-dnem.com.ua/ua/shutdowns')) }; }
+    catch {
+      const j = JSON.parse(await get('https://raw.githubusercontent.com/Khreptus/electrocity/main/data/schedules/dtek-dnem.json'));
+      const age = Date.now() - Date.parse(j.checkedAt || j.updatedAt || 0);
+      if (!(age < 6 * 3600e3)) throw new Error('файл ДТЕК Дніпро застарів');
+      return { ...meta, days: j.days, publishedAt: j.publishedAt };
+    }
+  } },
   { op: 'hoe', fetch: async get => ({ operator: 'hoe', name: 'Хмельницькобленерго', source: { url: 'https://hoe.com.ua/page/pogodinni-vidkljuchennja', kind: 'official' }, ...parseHoe(await get('https://hoe.com.ua/page/pogodinni-vidkljuchennja')) }) },
   { op: 'moe', fetch: async get => { const [a, b, c] = await Promise.all([get(`${MOE}/schedule/time-series`), get(`${MOE}/outage-queue/by-type/3`), get(`${MOE}/v2/schedule/active`)]);
     return { operator: 'moe', name: 'Миколаївобленерго', source: { url: 'https://off.energy.mk.ua/', kind: 'official' }, ...parseMoe(JSON.parse(a), JSON.parse(b), JSON.parse(c)) }; } },
