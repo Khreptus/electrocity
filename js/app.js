@@ -1,0 +1,345 @@
+import { ic, STATE_ICON } from './icons.js';
+import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents } from './data.js';
+
+// ---------- Стан ----------
+const KEY = 'svitlo.v1';
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
+let S = Object.assign({ addresses: [], primaryId: null, currentId: null, theme: 'system', notify: { before: 30, enabled: false } }, load());
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+const uid = () => Math.random().toString(36).slice(2, 9);
+const cur = () => S.addresses.find(a => a.id === S.currentId) || S.addresses.find(a => a.id === S.primaryId) || S.addresses[0];
+
+let view = S.addresses.length ? 'home' : 'welcome';
+let day = 0;               // 0 сьогодні, 1 завтра
+let draft = null;          // чернетка адреси в онбордингу / додаванні
+let editId = null;
+
+const NAMES = [['home', 'Дім'], ['briefcase', 'Робота'], ['users', 'Батьки'], ['tree', 'Дача'], ['edit', 'Інше']];
+const STATE_TEXT = { on: 'Світло є', off: 'Відключення', possible: 'Можливе', unknown: 'Невідомо', emergency: 'Аварія' };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+const hmEnd = m => (m >= 1440 ? '24:00' : hm(m));
+const dur = m => { m = Math.round(m); const h = Math.floor(m / 60), r = m % 60; return h && r ? `${h} год ${r} хв` : h ? `${h} год` : `${r} хв`; };
+const cd = m => { m = Math.max(0, Math.floor(m)); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+const addrLine = a => [a.city, a.street && `${a.street}${a.house ? ', ' + a.house : ''}`].filter(Boolean).join(' · ');
+
+// ---------- Тема ----------
+function applyTheme() {
+  const dark = S.theme === 'dark' || (S.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+
+// ---------- Рендер ----------
+const $app = document.getElementById('app');
+async function render() {
+  applyTheme();
+  const tabs = ['home', 'addresses', 'settings'].includes(view);
+  let html = '';
+  if (view === 'welcome') html = welcome();
+  else if (view.startsWith('ob-')) html = onboarding();
+  else if (view === 'home') html = await home();
+  else if (view === 'detail') html = await detail();
+  else if (view === 'addresses') html = await addresses();
+  else if (view === 'edit') html = edit();
+  else if (view === 'settings') html = settings();
+  const side = tabs || view === 'detail' ? await sidebar() : '';
+  $app.innerHTML = side + `<div class="desk-wrap"><main class="view ${tabs ? '' : 'no-tabs'}">${html}</main></div>` + (tabs ? tabbar() : '');
+  document.title = view === 'home' && cur() ? `${cur().name} · Світло` : 'Світло — графік відключень';
+}
+
+function tabbar() {
+  const t = (v, i, l) => `<button data-go="${v}" ${view === v ? 'aria-current="page"' : ''}>${ic(i)}${l}</button>`;
+  return `<nav class="tabs">${t('home', 'zap', 'Світло')}${t('addresses', 'map-pin', 'Адреси')}${t('settings', 'settings', 'Налаштування')}</nav>`;
+}
+async function sidebar() {
+  const cards = await Promise.all(S.addresses.map(a => addrCard(a, true)));
+  const n = (v, i, l) => `<button data-go="${v}" ${view === v ? 'aria-current="page"' : ''}>${ic(i)}${l}</button>`;
+  return `<aside class="side"><div class="brand"><img src="icons/icon-192.png" alt="" width="36" height="36" style="border-radius:10px">Світло</div>
+  <nav>${n('home', 'zap', 'Графік')}${n('addresses', 'map-pin', 'Мої адреси')}${n('settings', 'settings', 'Налаштування')}</nav>
+  ${S.addresses.length ? '<div class="over" style="color:var(--stage-text-3)">Мої адреси</div>' : ''}${cards.join('')}</aside>`;
+}
+
+// ----- Головна -----
+function heroInfo(data, a) {
+  const { date, min } = kyivNow();
+  const segs = segmentsFor(data, date, a.queue);
+  const s = stateAt(segs, min);
+  if (!s) return { state: 'unknown', title: 'Статус невідомий', sub: 'Немає даних для черги ' + a.queue + ' на сьогодні', note: 'Час наступної зміни невідомий' };
+  const st = s[2];
+  const nc = nextChange(data, date, a.queue, min);
+  const q = 'Черга ' + a.queue;
+  const base = { state: st, nc, min };
+  if (st === 'on') return { ...base, title: 'Світло є', sub: `${q} · з ${hm(s[0])} до ${hmEnd(s[1])}`, tl: 'До відключення', nl: 'Відключення о' };
+  if (st === 'off') return { ...base, title: 'Світла немає', sub: `Планове відключення · ${q}`, tl: 'До відновлення', nl: 'Відновлення о' };
+  if (st === 'possible') return { ...base, title: 'Можливе відключення', sub: `${q} · ${hm(s[0])}–${hmEnd(s[1])} · попередньо`, tl: 'До відключення', nl: 'Відключення о' };
+  if (st === 'emergency') return { ...base, title: 'Аварійне відключення', sub: 'Оператор повідомив про аварію', note: 'Час відновлення невідомий' };
+  return { ...base, title: 'Статус невідомий', sub: 'Немає достовірних даних на цей час', note: 'Час наступної зміни невідомий' };
+}
+function stage(a, h, loading) {
+  const st = loading ? 'loading' : h.state;
+  const lampState = st === 'on' ? 'on' : st;
+  const badgeBg = { on: 'var(--on)', off: 'var(--off)', possible: 'var(--possible)', emergency: 'var(--emergency)', unknown: 'var(--unknown)', loading: 'var(--unknown)' }[st];
+  let body;
+  if (loading) body = `<div class="hero"><div class="src"><span class="badge" style="background:${badgeBg}">${ic('refresh')}</span>За опублікованим графіком</div><h1 style="color:var(--stage-text)">Графік оновлюється</h1><div class="sub" style="color:var(--stage-text-2)">Перевіряємо джерела…</div><div style="display:grid;gap:8px;margin-top:16px"><div class="skel" style="width:180px"></div><div class="skel" style="width:120px"></div></div></div>`;
+  else {
+    const timer = h.nc ? `<div class="timer"><div><div class="lbl">${h.tl}</div><div class="big" data-countdown="${h.nc.at}">${cd(h.nc.at - h.min)}</div></div><div><div class="lbl" style="text-align:right">${h.nl}</div><div class="nx">${hm(h.nc.at)}</div></div></div>`
+      : `<div class="note">${ic('clock')}${h.note || 'Час наступної зміни невідомий'}</div>`;
+    body = `<div class="hero st-${h.state}"><div class="src"><span class="badge" style="background:${badgeBg}">${ic(STATE_ICON[h.state] || 'help')}</span>За опублікованим графіком</div><h1>${h.title}</h1><div class="sub">${esc(h.sub)}</div>${timer}</div>`;
+  }
+  return `<section class="stage" data-state="${lampState}"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt="">
+   <button class="loc" data-act="switcher"><span class="tile">${ic(NAMES.find(n => n[1] === a.name)?.[0] || 'home')}</span><span class="txt"><span class="name">${esc(a.name)} ${ic('chevron-down')}</span><span class="addr">${esc(addrLine(a) || region(a.regionId)?.name)}</span></span><span class="tile round" data-act="notif" role="button" aria-label="Сповіщення">${ic('bell')}</span></button>
+   <div class="lamp-space"></div>${body}</section>`;
+}
+
+function scaleHTML(segs, nowMin, opts = {}) {
+  if (!segs) return '';
+  const pct = m => (m / 1440 * 100).toFixed(3) + '%';
+  let h = `<div class="scale ${opts.compact ? 'compact' : ''}" role="img" aria-label="Графік на добу"><div class="track">`;
+  segs.forEach((s, i) => {
+    const w = (s[1] - s[0]) / 1440 * 100;
+    const gap = i < segs.length - 1 ? 2 : 0;
+    h += `<button class="s ${s[2]}" style="left:${pct(s[0])};width:calc(${w.toFixed(3)}% - ${gap}px)" data-act="seg" data-i="${i}" aria-label="${STATE_TEXT[s[2]]} ${hm(s[0])}–${hmEnd(s[1])}">${!opts.compact && w > 6 ? ic(STATE_ICON[s[2]]) : ''}</button>`;
+  });
+  if (nowMin != null) h += `<div class="past" style="width:${pct(nowMin)}"></div>`;
+  h += '</div>';
+  if (nowMin != null) h += `<div class="nowline" style="left:${pct(nowMin)}"></div><div class="nowdot" style="left:${pct(nowMin)}"></div>` + (opts.compact ? '' : `<div class="pill" style="left:clamp(22px,${pct(nowMin)},calc(100% - 22px))">${hm(nowMin)}</div>`);
+  if (!opts.compact) {
+    for (let i = 1; i < 24; i++) h += `<i class="tick ${i % 3 ? '' : 'b'}" style="left:${pct(i * 60)}"></i>`;
+    for (let i = 0; i <= 24; i += 3) h += `<span class="lab" style="left:${pct(i * 60)};${i === 24 ? 'transform:translateX(-100%)' : i === 0 ? 'transform:none' : ''}">${String(i).padStart(2, '0')}</span>`;
+  }
+  return h + '</div>';
+}
+function evRow(s, min, isToday) {
+  const st = s[2];
+  const title = { on: 'Світло є', off: 'Відключення', possible: 'Можливе відключення', unknown: 'Немає даних', emergency: 'Аварійне відключення' }[st];
+  const now = isToday && min >= s[0] && min < s[1];
+  const rel = !isToday ? '' : now ? `ще ${dur(s[1] - min)}` : s[0] > min ? `через ${dur(s[0] - min)}` : '';
+  return `<div class="ev ${isToday && s[1] <= min ? 'past' : ''}"><span class="t">${hm(s[0])}</span><span class="b ${st}">${ic(STATE_ICON[st])}</span><span class="tx"><span class="tt">${title}${now ? ' · зараз' : ''}</span><br><span class="d">${hm(s[0])} – ${hmEnd(s[1])} · ${dur(s[1] - s[0])}</span></span><span class="r">${rel}</span></div>`;
+}
+function sourceLine(data, a) {
+  if (data.demo) return `<div class="source warn">${ic('info')}Демо-дані · джерело ${esc(region(a.regionId)?.opName)} ще не підключене</div>`;
+  const t = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
+  return `<a class="source ok" href="${esc(data.source?.url || '#')}" target="_blank" rel="noopener">${ic('shield')}${esc(data.name || region(a.regionId)?.opName)} · оновлено ${t} ${ic('external')}</a>`;
+}
+function banners(data) {
+  let b = '';
+  if (!navigator.onLine) b += `<div class="banner warn">${ic('wifi-off')}<div><div class="bt">Немає з’єднання</div><div class="bb">Показуємо збережений графік.</div></div></div>`;
+  if (data.demo) b += `<div class="banner demo">${ic('info')}<div><div class="bt">Це демо-графік</div><div class="bb">Реальні дані оператора підключимо найближчим часом. Не орієнтуйтеся на ці інтервали.</div></div></div>`;
+  return b;
+}
+async function home() {
+  const a = cur();
+  if (!a) { view = 'welcome'; return welcome(); }
+  const data = await loadSchedule(region(a.regionId).op);
+  const h = heroInfo(data, a);
+  const { date, min } = kyivNow();
+  const d = addDays(date, day);
+  const segs = segmentsFor(data, d, a.queue);
+  const isToday = day === 0;
+  const tmr = segmentsFor(data, addDays(date, 1), a.queue);
+  const evs = isToday ? upcomingEvents(segs, min).slice(0, 3) : (segs || []);
+  const scaleBlock = segs ? scaleHTML(segs, isToday ? min : null) :
+    `<div class="empty-day">${ic('calendar')}<div class="h-s" style="font-size:16px">Графік на ${isToday ? 'сьогодні' : 'завтра'} ще не опубліковано</div><div class="body-s">Зазвичай оператор публікує його ввечері.</div></div>`;
+  return stage(a, h) + `<section class="sheet">${banners(data)}
+   <div class="card"><div class="row-head"><div class="h-s">Графік на ${isToday ? 'сьогодні' : 'завтра'}</div><button class="link" data-go="detail">Детальніше ${ic('chevron-right')}</button></div>
+   <div class="seg" role="group"><button data-day="0" aria-pressed="${isToday}">Сьогодні</button><button data-day="1" aria-pressed="${!isToday}" ${tmr ? '' : ''}>Завтра</button></div>
+   ${scaleBlock}${evs.map(s => evRow(s, min, isToday)).join('')}${sourceLine(data, a)}</div></section>`;
+}
+async function detail() {
+  const a = cur(); const data = await loadSchedule(region(a.regionId).op);
+  const { date, min } = kyivNow(); const d = addDays(date, day); const isToday = day === 0;
+  const segs = segmentsFor(data, d, a.queue);
+  const sum = st => (segs || []).filter(s => st.includes(s[2])).reduce((t, s) => t + s[1] - s[0], 0);
+  const tile = (l, v, c) => `<div class="card" style="flex:1;gap:2px;padding:12px;border-radius:16px"><span class="cap">${l}</span><span class="h-s" style="color:var(--${c}-ink)">${v}</span></div>`;
+  return `${band(`Графік · Черга ${esc(a.queue)}`, true)}<section class="sheet r32">
+   <div class="seg"><button data-day="0" aria-pressed="${isToday}">Сьогодні</button><button data-day="1" aria-pressed="${!isToday}">Завтра</button></div>
+   ${segs ? `<div class="card">${scaleHTML(segs, isToday ? min : null)}</div><div style="display:flex;gap:8px">${tile('Зі світлом', dur(sum(['on'])), 'on')}${tile('Без світла', dur(sum(['off', 'emergency'])), 'off')}${tile('Можливо', dur(sum(['possible'])), 'possible')}</div>
+   <div class="card" style="gap:0;padding:4px 16px">${segs.map(s => evRow(s, min, isToday)).join('')}</div>` : `<div class="empty-day">${ic('calendar')}<div>Графік ще не опубліковано</div></div>`}
+   <div class="card" style="gap:10px">${sourceLine(data, a)}<div class="cap">Графік може змінюватися протягом дня. Статус — за опублікованим графіком, а не фактична наявність світла.</div></div></section>`;
+}
+
+// ----- Адреси -----
+async function addrCard(a, compact) {
+  const data = await loadSchedule(region(a.regionId).op);
+  const { date, min } = kyivNow();
+  const segs = segmentsFor(data, date, a.queue); const s = stateAt(segs, min); const st = s ? s[2] : 'unknown';
+  const nc = nextChange(data, date, a.queue, min);
+  const next = nc ? `${['off', 'emergency'].includes(nc.state) ? 'Відключення' : 'Відновлення'} о ${hm(nc.at)}` : '';
+  const icn = NAMES.find(n => n[1] === a.name)?.[0] || 'map-pin';
+  return `<div class="acard ${a.id === cur()?.id ? 'sel' : ''}" data-act="pick" data-id="${a.id}" role="button" tabindex="0">
+   <div class="hd"><span class="at">${ic(icn)}</span><span style="flex:1;min-width:0"><span class="nm">${esc(a.name)}${a.id === S.primaryId ? ic('star', '" style="width:14px;height:14px;color:var(--possible)') : ''}</span><span class="ad" style="display:block">${esc(addrLine(a) || region(a.regionId).name)}</span></span>${compact ? '' : `<button data-act="edit" data-id="${a.id}" aria-label="Змінити">${ic('more')}</button>`}</div>
+   <div class="ft"><span class="pill ${st}"><i></i>${STATE_TEXT[st]}</span><span class="chip">${ic('grid')}Черга ${esc(a.queue)}</span></div>
+   <div class="ft" style="justify-content:space-between;flex-wrap:nowrap"><div style="width:140px">${scaleHTML(segs, min, { compact: true })}</div><span class="cap">${next}</span></div></div>`;
+}
+async function addresses() {
+  const cards = await Promise.all(S.addresses.map(a => addrCard(a)));
+  return `<div class="band"><div class="bar"><span class="h-l">Мої адреси</span><button class="btn-ic" data-act="add" aria-label="Додати адресу">${ic('plus')}</button></div><div class="body-s">Основна адреса (зірочка) відкривається при запуску.</div></div>
+   <section class="sheet r32">${cards.join('')}<button class="btn secondary" data-act="add">${ic('plus')} Додати адресу</button></section>`;
+}
+function edit() {
+  const a = S.addresses.find(x => x.id === editId); if (!a) { view = 'addresses'; return ''; }
+  const r = region(a.regionId);
+  return `${band('Редагування', true, 'addresses')}<section class="sheet r32">
+   <div class="cap">Назва</div><div class="namechips">${NAMES.map(([i, l]) => `<button data-act="rename" data-v="${l}" aria-pressed="${a.name === l}">${ic(i)}${l}</button>`).join('')}</div>
+   <div class="list">
+    <div class="li"><span class="lt">${ic('globe')}</span><span class="tx"><span class="tt">${esc(r.name)}</span><br><span class="st">${esc(r.opName)}</span></span></div>
+    <div class="li"><span class="lt">${ic('map-pin')}</span><span class="tx"><span class="tt">${esc(addrLine(a) || 'Адресу не вказано')}</span></span></div>
+    <button class="li" data-act="requeue"><span class="lt">${ic('grid')}</span><span class="tx"><span class="tt">Черга ${esc(a.queue)}</span><br><span class="st">Змінити чергу</span></span>${ic('chevron-right', 'chev')}</button>
+    <button class="li" data-act="primary"><span class="lt">${ic('star')}</span><span class="tx"><span class="tt">Основна адреса</span></span><span class="toggle" role="switch" aria-checked="${S.primaryId === a.id}"></span></button>
+   </div>
+   <button class="btn danger" data-act="delete">${ic('trash')} Видалити адресу</button></section>`;
+}
+
+// ----- Налаштування -----
+function settings() {
+  const th = { system: 'Системна', light: 'Світла', dark: 'Темна' }[S.theme];
+  const li = (act, i, t, st, val, tail = ic('chevron-right', 'chev')) => `<button class="li" data-act="${act}"><span class="lt">${ic(i)}</span><span class="tx"><span class="tt">${t}</span>${st ? `<br><span class="st">${st}</span>` : ''}</span>${val ? `<span class="val">${val}</span>` : ''}${tail}</button>`;
+  const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+  return `<div class="band"><span class="h-l">Налаштування</span></div><section class="sheet r32">
+   <div class="over">Основне</div><div class="list">${li('notif', 'bell', 'Сповіщення', perm === 'granted' ? 'Дозволено' : perm === 'denied' ? 'Заборонено в системі' : 'Не налаштовано', '')}</div>
+   <div class="over">Вигляд</div><div class="list">${li('theme', 'moon', 'Тема', null, th)}${li('noop', 'globe', 'Мова', null, 'Українська', '')}</div>
+   <div class="over">Дані</div><div class="list">${li('sources', 'shield', 'Джерела даних', 'Офіційні оператори')}${li('clearcache', 'database', 'Оновити графіки', 'Скинути збережені дані графіків', '', '')}</div>
+   <div class="over">Про застосунок</div><div class="list">${li('noop', 'lock', 'Конфіденційність', 'Без акаунта. Адреси зберігаються лише на цьому пристрої', '', '')}${li('noop', 'info', 'Версія', null, '0.1 (бета)', '')}</div></section>`;
+}
+function band(title, back, backTo = 'home') {
+  return `<div class="band"><div class="bar">${back ? `<button class="btn-ic" data-go="${backTo}" aria-label="Назад">${ic('chevron-left')}</button>` : '<span></span>'}<span class="ttl">${title}</span><span style="width:40px"></span></div></div>`;
+}
+
+// ----- Онбординг -----
+function welcome() {
+  return `<section class="stage" data-state="on" style="padding-bottom:72px"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt="">
+   <div style="height:200px"></div><h1 class="h-l" style="font-size:30px;line-height:36px">Знайте, коли буде <span style="color:var(--light)">світло</span></h1>
+   <p class="body-s" style="color:var(--stage-text-2);margin-top:12px">Графік відключень для вашої адреси по всій Україні — з офіційних джерел операторів.</p></section>
+   <section class="sheet" style="gap:16px">
+    ${[['map-pin', 'Черга за адресою — без пошуку в таблицях'], ['bell', 'Попередження перед відключенням'], ['home', 'Кілька адрес: дім, робота, батьки']].map(([i, t]) => `<div style="display:flex;gap:12px;align-items:center"><span class="lt" style="width:36px;height:36px;border-radius:12px;background:var(--surface);display:grid;place-items:center">${ic(i)}</span><span>${t}</span></div>`).join('')}
+    <div style="flex:1"></div><button class="btn primary" data-act="start">Налаштувати адресу</button><div class="cap3" style="text-align:center">Без реєстрації та номера телефону</div></section>`;
+}
+function steps(n) { return `<div class="steps">${[1, 2, 3, 4].map(i => `<i class="${i <= n ? 'a' : ''}"></i>`).join('')}</div><div class="cap3">Крок ${n} з 4</div>`; }
+function onboarding() {
+  const back = S.addresses.length && view === 'ob-region' ? 'addresses' : null;
+  const bk = (to) => `<div class="band"><div class="bar"><button class="btn-ic" data-ob="${to}" aria-label="Назад">${ic('chevron-left')}</button><span class="ttl">${{ 'ob-region': 'Область', 'ob-city': 'Населений пункт', 'ob-method': 'Спосіб', 'ob-address': 'Адреса', 'ob-queue': 'Черга', 'ob-confirm': 'Підтвердження' }[view]}</span><span style="width:40px"></span></div></div>`;
+  const r = draft.regionId && region(draft.regionId);
+  if (view === 'ob-region') return bk(back ? 'back-addresses' : 'welcome') + `<section class="sheet r32">${steps(1)}
+    <label class="field">${ic('search')}<input id="q" placeholder="Пошук області" autocomplete="off" value="${esc(draft.q || '')}"></label>
+    <div class="list" id="rlist">${REGIONS.filter(x => !draft.q || x.name.toLowerCase().includes(draft.q.toLowerCase())).map(x => `<button class="li" data-act="region" data-id="${x.id}"><span class="tx"><span class="tt">${x.name}</span><br><span class="st">${x.opName}</span></span>${ic('chevron-right', 'chev')}</button>`).join('')}</div></section>`;
+  if (view === 'ob-city') return bk('ob-region') + `<section class="sheet r32">${steps(2)}<div class="cap">${esc(r.name)} · ${esc(r.opName)}</div>
+    <label class="field">${ic('search')}<input id="city" placeholder="Назва міста чи села" value="${esc(draft.city || '')}" autocomplete="off"></label>
+    <div class="list"><button class="li" data-act="city" data-v="${esc(r.center)}"><span class="lt">${ic('map-pin')}</span><span class="tx"><span class="tt">${esc(r.center)}</span><br><span class="st">обласний центр</span></span></button></div>
+    <div class="body-s">Повний довідник населених пунктів підключимо разом із джерелами оператора. Поки введіть назву вручну.</div>
+    <div style="flex:1"></div><button class="btn primary" data-act="city-next">Продовжити</button></section>`;
+  if (view === 'ob-method') return bk('ob-city') + `<section class="sheet r32">${steps(3)}<div class="h-l">Як визначити ваш графік?</div>
+    <button class="opt" data-act="method" data-v="address" aria-pressed="${draft.method === 'address'}"><span class="ot">${ic('map-pin')}</span><span><span class="h-s">За адресою</span><br><span class="body-s">Вкажіть вулицю й будинок — чергу визначимо автоматично, щойно оператор це підтримає</span></span></button>
+    <button class="opt" data-act="method" data-v="queue" aria-pressed="${draft.method === 'queue'}"><span class="ot">${ic('grid')}</span><span><span class="h-s">Я знаю свою чергу</span><br><span class="body-s">Оберіть чергу або підчергу зі списку оператора</span></span></button>
+    <div style="flex:1"></div><button class="btn primary" data-act="method-next">Продовжити</button></section>`;
+  if (view === 'ob-address') return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
+    <label class="field">${ic('search')}<input id="street" placeholder="Вулиця" value="${esc(draft.street || '')}" autocomplete="street-address"></label>
+    <label class="field">${ic('home')}<input id="house" placeholder="Будинок" value="${esc(draft.house || '')}" inputmode="text"></label>
+    <div class="banner info">${ic('info')}<div><div class="bt">Автовизначення черги ще не підключене</div><div class="bb">Адресу збережемо, а чергу поки оберіть вручну — вона вказана в особовому кабінеті оператора.</div></div></div>
+    <div style="flex:1"></div><button class="btn primary" data-act="address-next">Обрати чергу</button></section>`;
+  if (view === 'ob-queue') { const ql = queueList(r.queues); return bk(draft.method === 'address' ? 'ob-address' : 'ob-method') + `<section class="sheet r32">${steps(4)}<div class="h-l">Оберіть чергу</div><div class="body-s">Черги ${esc(r.opName)}</div>
+    <div class="qgrid ${r.queues.type === 'plain' ? 'c3' : ''}">${ql.map(q => `<button class="qcell" data-act="queue" data-v="${q}" aria-pressed="${draft.queue === q}">${q}</button>`).join('')}</div>
+    <div style="flex:1"></div><button class="btn primary" data-act="queue-next" ${draft.queue ? '' : 'disabled'}>${draft.queue ? 'Обрати ' + draft.queue : 'Оберіть чергу'}</button></section>`; }
+  if (view === 'ob-confirm') return bk('ob-queue') + `<section class="sheet r32"><div class="h-l">Все готово</div>
+    <div class="card">${[['Населений пункт', `${draft.city}, ${r.name}`], ['Адреса', [draft.street, draft.house].filter(Boolean).join(', ') || '—'], ['Оператор', r.opName]].map(([k, v]) => `<div><div class="cap3">${k}</div><div style="font-weight:500">${esc(v)}</div></div>`).join('')}<div><span class="chip">${ic('grid')}Черга ${esc(draft.queue)}</span></div></div>
+    <div class="cap">Назва адреси</div><div class="namechips">${NAMES.map(([i, l]) => `<button data-act="dname" data-v="${l}" aria-pressed="${draft.name === l}">${ic(i)}${l}</button>`).join('')}</div>
+    <div style="flex:1"></div><button class="btn primary" data-act="save">Перейти до графіка</button></section>`;
+  return '';
+}
+
+// ---------- Листи ----------
+function openSheet(html, cls = '') {
+  closeSheet();
+  const o = document.createElement('div'); o.className = 'overlay'; o.dataset.act = 'close';
+  const s = document.createElement('div'); s.className = 'bsheet ' + cls; s.setAttribute('role', 'dialog'); s.innerHTML = '<div class="grab"></div>' + html;
+  document.body.append(o, s);
+}
+function closeSheet() { document.querySelectorAll('.overlay,.bsheet').forEach(n => n.remove()); }
+function toast(t) { document.querySelector('.toast')?.remove(); const d = document.createElement('div'); d.className = 'toast'; d.innerHTML = ic('check') + esc(t); document.body.append(d); setTimeout(() => d.remove(), 3500); }
+
+async function segSheet(i) {
+  const a = cur(); const data = await loadSchedule(region(a.regionId).op); const { date } = kyivNow();
+  const s = segmentsFor(data, addDays(date, day), a.queue)[i]; if (!s) return;
+  const title = { on: 'Світло є', off: 'Планове відключення', possible: 'Можливе відключення', unknown: 'Немає даних', emergency: 'Аварійне відключення' }[s[2]];
+  openSheet(`<div style="display:flex;gap:12px;align-items:center"><span class="b ${s[2]}" style="width:44px;height:44px;border-radius:14px;display:grid;place-items:center">${ic(STATE_ICON[s[2]])}</span><div><div class="h-s" style="font-size:22px">${title}</div><div class="cap">${day ? 'Завтра' : 'Сьогодні'} · Черга ${esc(a.queue)}</div></div></div>
+   <div class="times"><div><div class="cap3">Початок</div><div class="mono" style="font-size:20px;font-weight:600">${hm(s[0])}</div></div><div><div class="cap3">Кінець</div><div class="mono" style="font-size:20px;font-weight:600">${hmEnd(s[1])}</div></div><div><div class="cap3">Тривалість</div><div style="font-weight:500;margin-top:2px">${dur(s[1] - s[0])}</div></div></div>
+   ${sourceLine(data, a)}<button class="btn secondary" data-act="close">Закрити</button>`);
+}
+async function switcherSheet() {
+  const cards = await Promise.all(S.addresses.map(a => addrCard(a, true)));
+  openSheet(`<div class="row-head"><div class="h-s" style="font-size:22px">Мої адреси</div><button class="link" data-go="addresses" data-act="close">Керувати</button></div>${cards.join('')}<button class="btn secondary" data-act="add">${ic('plus')} Додати адресу</button>`, 'bg');
+}
+function themeSheet() {
+  openSheet(`<div class="h-s" style="font-size:22px">Тема</div><div class="list" style="background:var(--surface-2)">${[['system', 'Системна'], ['light', 'Світла'], ['dark', 'Темна']].map(([k, l]) => `<button class="li" data-act="settheme" data-v="${k}"><span class="tx"><span class="tt">${l}</span></span>${S.theme === k ? ic('check', '" style="color:var(--accent)') : ''}</button>`).join('')}</div>`);
+}
+function sourcesSheet() {
+  const ops = [...new Set(S.addresses.map(a => a.regionId))].map(region);
+  openSheet(`<div class="h-s" style="font-size:22px">Джерела даних</div><div class="body-s">Пріоритет — офіційні дані операторів. Неофіційні повідомлення ніколи не змішуються з графіком без позначки.</div>
+   ${ops.map(r => `<div class="card" style="box-shadow:none;background:var(--surface-2)"><div class="h-s">${esc(r.opName)}</div><div class="cap">Підключення джерела — у роботі. Зараз показуємо демо-дані.</div></div>`).join('') || '<div class="body-s">Додайте адресу, щоб побачити джерела.</div>'}`);
+}
+async function notifSheet() {
+  const sup = 'Notification' in window;
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  let body;
+  if (ios && !standalone) body = `<div class="h-s" style="font-size:22px">Додайте на початковий екран</div><div class="body-s">На iPhone сповіщення працюють лише для застосунку, встановленого на початковий екран (iOS 16.4+).</div>
+    <div class="list" style="background:var(--surface-2)">${[['share', 'Натисніть «Поділитися» в Safari'], ['plus', 'Оберіть «На початковий екран»'], ['bell', 'Відкрийте «Світло» з екрана й дозвольте сповіщення']].map(([i, t], n) => `<div class="li"><span class="lt">${n + 1}</span><span class="tx"><span class="tt" style="font-size:14px">${t}</span></span>${ic(i)}</div>`).join('')}</div>`;
+  else if (!sup) body = `<div class="h-s" style="font-size:22px">Сповіщення недоступні</div><div class="body-s">Цей браузер не підтримує веб-сповіщення.</div>`;
+  else if (Notification.permission === 'denied') body = `<div class="h-s" style="font-size:22px">Сповіщення вимкнено в системі</div><div class="body-s">Увімкніть їх у налаштуваннях браузера або системи для цього сайту.</div>`;
+  else body = `<div class="h-s" style="font-size:22px">Не пропустіть відключення</div><div class="body-s">Попередимо за 30 хв до відключення й відновлення та повідомимо про зміни графіка. Сервер сповіщень підключаємо — дозвіл можна дати вже зараз.</div>
+    <button class="btn primary" data-act="askperm">${Notification.permission === 'granted' ? 'Дозволено ✓' : 'Дозволити сповіщення'}</button>`;
+  openSheet(body + `<button class="btn ghost" data-act="close">Закрити</button>`);
+}
+
+// ---------- Події ----------
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-act],[data-go],[data-day],[data-ob]');
+  if (!t) return;
+  const act = t.dataset.act;
+  if (t.dataset.go) { closeSheet(); view = t.dataset.go; if (view !== 'detail') day = day; return render(); }
+  if (t.dataset.day) { day = +t.dataset.day; return render(); }
+  if (t.dataset.ob) { if (t.dataset.ob === 'back-addresses') { view = 'addresses'; draft = null; } else view = t.dataset.ob; return render(); }
+  switch (act) {
+    case 'close': closeSheet(); break;
+    case 'start': case 'add': closeSheet(); draft = { method: 'address', name: S.addresses.some(a => a.name === 'Дім') ? 'Робота' : 'Дім' }; view = 'ob-region'; render(); break;
+    case 'region': draft.regionId = t.dataset.id; draft.city = ''; draft.queue = null; view = 'ob-city'; render(); break;
+    case 'city': draft.city = t.dataset.v; view = 'ob-method'; render(); break;
+    case 'city-next': { const v = document.getElementById('city').value.trim(); if (!v) { document.getElementById('city').focus(); break; } draft.city = v; view = 'ob-method'; render(); break; }
+    case 'method': draft.method = t.dataset.v; render(); break;
+    case 'method-next': view = draft.method === 'address' ? 'ob-address' : 'ob-queue'; render(); break;
+    case 'address-next': draft.street = document.getElementById('street').value.trim(); draft.house = document.getElementById('house').value.trim(); view = 'ob-queue'; render(); break;
+    case 'queue': draft.queue = t.dataset.v; render(); break;
+    case 'queue-next': if (draft.editOf) { const a = S.addresses.find(x => x.id === draft.editOf); a.queue = draft.queue; save(); draft = null; view = 'edit'; toast('Чергу змінено'); } else view = 'ob-confirm'; render(); break;
+    case 'dname': draft.name = t.dataset.v; render(); break;
+    case 'save': { const a = { id: uid(), name: draft.name, regionId: draft.regionId, city: draft.city, street: draft.street || '', house: draft.house || '', queue: draft.queue };
+      S.addresses.push(a); if (!S.primaryId) S.primaryId = a.id; S.currentId = a.id; save(); draft = null; view = 'home'; day = 0; await render(); toast(`Адресу «${a.name}» збережено`); break; }
+    case 'switcher': if (e.target.closest('[data-act=notif]')) { notifSheet(); break; } switcherSheet(); break;
+    case 'notif': notifSheet(); break;
+    case 'pick': if (e.target.closest('[data-act=edit]')) break; S.currentId = t.dataset.id; save(); closeSheet(); view = 'home'; day = 0; render(); break;
+    case 'edit': editId = t.dataset.id; view = 'edit'; render(); break;
+    case 'rename': { const a = S.addresses.find(x => x.id === editId); a.name = t.dataset.v; save(); render(); break; }
+    case 'primary': S.primaryId = editId; save(); render(); break;
+    case 'requeue': { const a = S.addresses.find(x => x.id === editId); draft = { regionId: a.regionId, queue: a.queue, editOf: a.id, method: 'queue' }; view = 'ob-queue'; render(); break; }
+    case 'delete': { const a = S.addresses.find(x => x.id === editId); if (!confirm(`Видалити «${a.name}»? Адресу буде видалено з цього пристрою.`)) break;
+      S.addresses = S.addresses.filter(x => x.id !== editId); if (S.primaryId === editId) S.primaryId = S.addresses[0]?.id || null; if (S.currentId === editId) S.currentId = S.primaryId; save(); view = S.addresses.length ? 'addresses' : 'welcome'; render(); toast('Адресу видалено'); break; }
+    case 'seg': segSheet(+t.dataset.i); break;
+    case 'theme': themeSheet(); break;
+    case 'settheme': S.theme = t.dataset.v; save(); closeSheet(); render(); break;
+    case 'sources': sourcesSheet(); break;
+    case 'clearcache': clearScheduleCache(); if ('caches' in window) { const k = await caches.keys(); await Promise.all(k.filter(x => x.includes('data')).map(x => caches.delete(x))); } toast('Графіки оновлено'); render(); break;
+    case 'askperm': if (Notification.permission !== 'granted') { const p = await Notification.requestPermission(); S.notify.enabled = p === 'granted'; save(); } closeSheet(); render(); break;
+  }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'q') { draft.q = e.target.value; const list = document.getElementById('rlist'); const q = draft.q.toLowerCase();
+    list.querySelectorAll('.li').forEach(li => { li.hidden = !li.textContent.toLowerCase().includes(q); }); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); if (e.key === 'Enter' && e.target.matches('[role=button]')) e.target.click(); });
+addEventListener('online', render); addEventListener('offline', render);
+
+// Оновлення таймера й індикатора «зараз» щохвилини (раз на 20 с для точності)
+setInterval(() => { if (['home', 'detail', 'addresses'].includes(view) && !document.querySelector('.bsheet')) render(); }, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+render();
