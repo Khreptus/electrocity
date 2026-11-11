@@ -20,7 +20,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const hm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 const hmEnd = m => (m >= 1440 ? '24:00' : hm(m));
 const dur = m => { m = Math.round(m); const h = Math.floor(m / 60), r = m % 60; return h && r ? `${h} год ${r} хв` : h ? `${h} год` : `${r} хв`; };
-const cd = m => { m = Math.max(0, Math.floor(m)); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+const cd = m => { const t = Math.max(0, Math.floor(m * 60)); const h = Math.floor(t / 3600), mm = Math.floor(t % 3600 / 60), ss = t % 60; return [h, mm, ss].map(x => String(x).padStart(2, '0')).join(':'); };
 const addrLine = a => [a.city, a.street && `${a.street}${a.house ? ', ' + a.house : ''}`].filter(Boolean).join(' · ');
 
 // ---------- Тема ----------
@@ -350,6 +350,14 @@ setInterval(() => { if (['home', 'detail', 'addresses'].includes(view) && !docum
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+// Таймер із секундами — оновлюється щосекунди без перерендеру
+setInterval(() => {
+  const el = document.querySelector('[data-countdown]'); if (!el) return;
+  const left = +el.dataset.countdown - kyivNow().min;
+  if (left <= 0) { render(); return; }
+  el.textContent = cd(left);
+}, 1000);
 
 // Прелоадер: анімація іконки 3 с, потім плавно зникає (застосунок рендериться під ним)
 const pre = document.getElementById('pre');

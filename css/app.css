@@ -73,7 +73,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .hero .sub{font-size:14px;line-height:20px;margin-top:4px}
 .hero .timer{display:flex;justify-content:space-between;align-items:flex-end;margin-top:16px}
 .hero .lbl{font-size:12px;font-weight:500;color:var(--stage-text-3)}
-.hero .big{font-family:var(--mono);font-weight:600;font-size:44px;line-height:48px;letter-spacing:-.03em}
+.hero .big{font-family:var(--mono);font-weight:600;font-size:37px;line-height:48px;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
 .hero .nx{font-family:var(--mono);font-weight:600;font-size:20px;line-height:24px;text-align:right}
 .hero .note{display:flex;gap:8px;align-items:center;background:var(--stage-tile);border-radius:14px;padding:10px 12px;margin-top:16px;font-size:14px;font-weight:500;color:var(--stage-text-2)}
 .st-on h1{color:var(--light)} .st-on .sub{color:var(--stage-text)}
