@@ -210,12 +210,14 @@ function band(title, back, backTo = 'home') {
 
 // ----- Онбординг -----
 function welcome() {
-  return `<section class="stage" data-state="on" style="padding-bottom:72px"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt="">
-   <div style="height:236px"></div><h1 class="h-l" style="font-size:30px;line-height:36px">Знайте, коли буде <span style="color:var(--light)">світло</span></h1>
-   <p class="body-s" style="color:var(--stage-text-2);margin-top:12px">Графік відключень для вашої адреси по всій Україні — з офіційних джерел операторів.</p></section>
-   <section class="sheet" style="gap:16px">
-    ${[['map-pin', 'Черга за адресою — без пошуку в таблицях'], ['bell', 'Попередження перед відключенням'], ['home', 'Кілька адрес: дім, робота, батьки']].map(([i, t]) => `<div style="display:flex;gap:12px;align-items:center"><span class="lt" style="width:36px;height:36px;border-radius:12px;background:var(--surface);display:grid;place-items:center">${ic(i)}</span><span>${t}</span></div>`).join('')}
-    <div style="flex:1"></div><button class="btn primary" data-act="start">Налаштувати адресу</button><div class="cap3" style="text-align:center">Без реєстрації та номера телефону</div></section>`;
+  const sample = [[0, 180, 'on'], [180, 390, 'off'], [390, 600, 'on'], [600, 810, 'off'], [810, 1140, 'on'], [1140, 1350, 'off'], [1350, 1410, 'possible'], [1410, 1440, 'on']];
+  return `<section class="stage" data-state="on" style="padding-bottom:80px"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt="">
+   <div style="height:230px"></div><h1 style="font-size:28px;line-height:34px;font-weight:600;letter-spacing:-.01em">Знайте, коли буде <span style="color:var(--light)">світло</span></h1>
+   <p style="color:var(--stage-text-2);margin-top:12px;font-size:16px;line-height:22px">Графік відключень для вашої адреси по всій Україні. Дані — з офіційних джерел операторів.</p></section>
+   <section class="sheet" style="gap:24px;padding-top:24px">
+    <div class="card" aria-hidden="true"><div class="row-head"><span class="pill on"><i></i>Світло є</span><span class="mono" style="font-size:15px;font-weight:500">До відключення 02:37</span></div>${scaleHTML(sample, 16 * 60 + 23)}</div>
+    ${[['map-pin', 'Черга за адресою — без пошуку в таблицях'], ['bell', 'Попередження перед відключенням']].map(([i, t]) => `<div style="display:flex;gap:12px;align-items:center"><span style="width:32px;height:32px;border-radius:10px;background:var(--surface);display:grid;place-items:center;flex:none">${ic(i)}</span><span style="font-size:14px">${t}</span></div>`).join('')}
+    <div style="flex:1"></div><div style="display:flex;flex-direction:column;gap:10px"><button class="btn primary" data-act="start">Налаштувати адресу</button><div class="cap3" style="text-align:center">Без реєстрації та номера телефону</div></div></section>`;
 }
 function steps(n) { return `<div class="steps">${[1, 2, 3, 4].map(i => `<i class="${i <= n ? 'a' : ''}"></i>`).join('')}</div><div class="cap3">Крок ${n} з 4</div>`; }
 function onboarding() {
