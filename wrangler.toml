@@ -1,0 +1,17 @@
+name = "electrocity"
+main = "worker/index.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "KV"
+id = "7e3143dc488843b0bc9843b5ac13aebd"
+
+[observability]
+enabled = true

@@ -1,3 +1,4 @@
+import { API, API_READY } from './config.js';
 // Регіони, оператори та завантаження графіків.
 // УВАГА: назви операторів і системи черг — попередні, перевіряються на етапі підключення джерел.
 
@@ -69,6 +70,10 @@ export async function loadSchedule(op) {
   if (c && Date.now() - c.fetchedAt < TTL) return c.data;
   let data = null;
   if (op === 'moe') { try { data = await moeLive(); } catch { /* резерв — файл */ } }
+  if (!data && API_READY) try {
+    const r = await fetch(`${API}api/schedules/${op}?m=${Math.floor(Date.now() / 60000)}`, { cache: 'no-store' });
+    if (r.ok) data = await r.json();
+  } catch { /* сервер недоступний — беремо файл */ }
   if (!data) try {
     // ?m=… обходить кеш CDN GitHub Pages (до 10 хв)
     const r = await fetch(`data/schedules/${op}.json?m=${Math.floor(Date.now() / 60000)}`, { cache: 'no-store' });

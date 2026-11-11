@@ -2,6 +2,7 @@
 // Джерела: довідник оператора (ДТЕК — міста/вулиці, Миколаїв — міста/вулиці/будинки + черга),
 // для решти — OpenStreetMap через Photon (komoot), українською.
 import { moeAddr } from './data.js';
+import { API, API_READY } from './config.js';
 
 const norm = s => String(s || '').toLowerCase().replace(/[’'ʼ`]/g, '’').replace(/ё/g, 'е').trim();
 // прибираємо «вул.», «м.», «с.» тощо, щоб «шев» знаходило «вул. Шевченка»
@@ -83,7 +84,20 @@ async function osmStreets(draft, q) {
   return uniq(res.filter(p => !nc || norm(p.city || '').includes(nc)).map(p => ({ label: p.name })), x => x.label).slice(0, 15);
 }
 
+// ДТЕК: будинки вулиці й черга кожного будинку (через наш сервер)
+const dtekHouseCache = {};
+export async function dtekHouses(op, city, street) {
+  const k = `${op}|${city}|${street}`;
+  dtekHouseCache[k] ||= fetch(`${API}api/dtek/houses?op=${encodeURIComponent(op)}&city=${encodeURIComponent(city)}&street=${encodeURIComponent(street)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(e => { delete dtekHouseCache[k]; throw e; });
+  return dtekHouseCache[k];
+}
+export const dtekAuto = region => region.op.startsWith('dtek-') && API_READY;
+
 export function houseSource(region, draft) {
+  if (dtekAuto(region) && draft.street) return async q => {
+    const d = await dtekHouses(region.op, draft.city, draft.street);
+    return rank(Object.entries(d.houses).map(([label, qs]) => ({ label, queues: qs })), q).slice(0, 40);
+  };
   if (region.addressLookup === 'moe' && draft.streetId) {
     let cache = null;
     return async q => { cache ||= (await moeAddr.houses(draft.streetId)).map(d => ({ label: d.nazdom, id: d.iddom })); return rank(cache, q).slice(0, 40); };

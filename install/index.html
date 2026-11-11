@@ -131,7 +131,10 @@ if (standalone) setInstalled('Electrocity вже встановлено на ц�
 
 // Chrome / Edge / Android: справжнє встановлення одним натисканням
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('installBtn').disabled = false; });
-addEventListener('appinstalled', () => { deferred = null; setInstalled('Готово! Іконка Electrocity — на робочому столі'); });
+const API = /\.workers\.dev$/.test(location.hostname) ? '/' : 'https://electrocity.REPLACE_SUBDOMAIN.workers.dev/';
+const platName = isIOS ? 'ios' : isAndroid ? 'android' : isMac ? 'mac' : /Windows/.test(ua) ? 'windows' : 'other';
+const report = () => { if (API.includes('REPLACE_')) return; try { localStorage.setItem('ec.installed', '1'); } catch {} fetch(API + 'api/stats/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ platform: platName }) }).catch(() => {}); };
+addEventListener('appinstalled', () => { deferred = null; setInstalled('Готово! Іконка Electrocity — на робочому столі'); report(); });
 
 function pointTo(text, top) {
   const p = $('pointer'); p.innerHTML = text; p.classList.toggle('top', !!top); p.hidden = false;

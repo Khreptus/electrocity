@@ -1,5 +1,6 @@
 import { ic, STATE_ICON } from './icons.js';
-import { citySource, streetSource, houseSource, attachTypeahead } from './address.js';
+import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto } from './address.js';
+import { API, API_READY } from './config.js';
 import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr } from './data.js';
 
 // ---------- Стан ----------
@@ -201,7 +202,7 @@ function settings() {
   const li = (act, i, t, st, val, tail = ic('chevron-right', 'chev')) => `<button class="li" data-act="${act}"><span class="lt">${ic(i)}</span><span class="tx"><span class="tt">${t}</span>${st ? `<br><span class="st">${st}</span>` : ''}</span>${val ? `<span class="val">${val}</span>` : ''}${tail}</button>`;
   const perm = 'Notification' in window ? Notification.permission : 'unsupported';
   return `<div class="band"><span class="h-l">Налаштування</span></div><section class="sheet r32">
-   <div class="over">Основне</div><div class="list">${li('notif', 'bell', 'Сповіщення', perm === 'granted' ? 'Дозволено' : perm === 'denied' ? 'Заборонено в системі' : 'Не налаштовано', '')}</div>
+   <div class="over">Основне</div><div class="list">${li('notif', 'bell', 'Сповіщення', S.notify.enabled ? 'Увімкнено' : perm === 'denied' ? 'Заборонено в системі' : 'Вимкнено', '')}</div>
    <div class="over">Вигляд</div><div class="list">${li('theme', 'moon', 'Тема', null, th)}${li('noop', 'globe', 'Мова', null, 'Українська', '')}</div>
    <div class="over">Поділитися</div><div class="list"><a class="li" href="install/"><span class="lt">${ic('share')}</span><span class="tx"><span class="tt">Сторінка встановлення</span><br><span class="st">Надішліть друзям — iPhone, Android, Mac</span></span>${ic('chevron-right', 'chev')}</a></div>
    <div class="over">Віджет</div><div class="list"><a class="li" href="widget/"><span class="lt">${ic('grid')}</span><span class="tx"><span class="tt">Віджет для iPhone</span><br><span class="st">Статус і таймер на головному екрані</span></span>${ic('chevron-right', 'chev')}</a></div>
@@ -245,7 +246,7 @@ function onboarding() {
     <button class="opt" data-act="method" data-v="address" aria-pressed="${draft.method === 'address'}"><span class="ot">${ic('map-pin')}</span><span><span class="h-s">За адресою</span><br><span class="body-s">Вкажіть вулицю й будинок — чергу визначимо автоматично, щойно оператор це підтримає</span></span></button>
     <button class="opt" data-act="method" data-v="queue" aria-pressed="${draft.method === 'queue'}"><span class="ot">${ic('grid')}</span><span><span class="h-s">Я знаю свою чергу</span><br><span class="body-s">Оберіть чергу або підчергу зі списку оператора</span></span></button>
     <div style="flex:1"></div><button class="btn primary" data-act="method-next">Продовжити</button></section>`;
-  if (view === 'ob-address') { const auto = r.addressLookup === 'moe' && draft.nsId; return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
+  if (view === 'ob-address') { const auto = (r.addressLookup === 'moe' && draft.nsId) || dtekAuto(r); return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
     <label class="field">${ic('search')}<input id="street" placeholder="Вулиця — почніть вводити" value="${esc(draft.street || '')}" autocomplete="off" enterkeyhint="next"></label>
     <label class="field">${ic('home')}<input id="house" placeholder="Номер будинку" value="${esc(draft.house || '')}" autocomplete="off" enterkeyhint="done"></label>
     <div id="addr-res"></div>
@@ -292,17 +293,37 @@ function sourcesSheet() {
    ${ops.map(r => `<div class="card" style="box-shadow:none;background:var(--surface-2)"><div class="h-s">${esc(r.opName)}</div><div class="source ${isLive(r.op) ? 'ok' : 'warn'}">${ic(isLive(r.op) ? 'shield' : 'info')}${isLive(r.op) ? 'Офіційне джерело підключено' : 'Джерело ще не підключене — показуємо демо-дані'}</div></div>`).join('') || '<div class="body-s">Додайте адресу, щоб побачити джерела.</div>'}`);
 }
 async function notifSheet() {
-  const sup = 'Notification' in window;
+  const sup = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const N = S.notify; N.types ||= { before: true, restore: true, change: true, tomorrow: true }; N.lead ||= 30;
   let body;
   if (ios && !standalone) body = `<div class="h-s" style="font-size:22px">Додайте на початковий екран</div><div class="body-s">На iPhone сповіщення працюють лише для застосунку, встановленого на початковий екран (iOS 16.4+).</div>
-    <div class="list" style="background:var(--surface-2)">${[['share', 'Натисніть «Поділитися» в Safari'], ['plus', 'Оберіть «На початковий екран»'], ['bell', 'Відкрийте Electrocity з екрана й дозвольте сповіщення']].map(([i, t], n) => `<div class="li"><span class="lt">${n + 1}</span><span class="tx"><span class="tt" style="font-size:14px">${t}</span></span>${ic(i)}</div>`).join('')}</div>`;
+    <div class="list" style="background:var(--surface-2)">${[['share', 'Натисніть «Поділитися» в Safari'], ['plus', 'Оберіть «На початковий екран»'], ['bell', 'Відкрийте Electrocity з екрана й увімкніть сповіщення']].map(([i, t], n) => `<div class="li"><span class="lt">${n + 1}</span><span class="tx"><span class="tt" style="font-size:14px">${t}</span></span>${ic(i)}</div>`).join('')}</div>`;
   else if (!sup) body = `<div class="h-s" style="font-size:22px">Сповіщення недоступні</div><div class="body-s">Цей браузер не підтримує веб-сповіщення.</div>`;
-  else if (Notification.permission === 'denied') body = `<div class="h-s" style="font-size:22px">Сповіщення вимкнено в системі</div><div class="body-s">Увімкніть їх у налаштуваннях браузера або системи для цього сайту.</div>`;
-  else body = `<div class="h-s" style="font-size:22px">Не пропустіть відключення</div><div class="body-s">Попередимо за 30 хв до відключення й відновлення та повідомимо про зміни графіка. Сервер сповіщень підключаємо — дозвіл можна дати вже зараз.</div>
-    <button class="btn primary" data-act="askperm">${Notification.permission === 'granted' ? 'Дозволено ✓' : 'Дозволити сповіщення'}</button>`;
+  else if (Notification.permission === 'denied') body = `<div class="h-s" style="font-size:22px">Сповіщення вимкнено в системі</div><div class="body-s">Дозвольте сповіщення для цього сайту в налаштуваннях браузера або системи, потім поверніться сюди.</div>`;
+  else if (!API_READY) body = `<div class="h-s" style="font-size:22px">Сервер сповіщень підключається</div><div class="body-s">Спробуйте трохи згодом.</div>`;
+  else {
+    const tg = (k, t, st) => `<button class="li" data-act="ntype" data-k="${k}"><span class="tx"><span class="tt">${t}</span>${st ? `<br><span class="st">${st}</span>` : ''}</span><span class="toggle" role="switch" aria-checked="${N.types[k] !== false}"></span></button>`;
+    body = `<div class="h-s" style="font-size:22px">Сповіщення</div>
+    <button class="li" data-act="npush" style="background:var(--surface-2);border-radius:16px"><span class="lt">${ic('bell')}</span><span class="tx"><span class="tt">Надсилати сповіщення</span><br><span class="st">Для всіх ваших адрес (${S.addresses.length})</span></span><span class="toggle" role="switch" aria-checked="${!!N.enabled}"></span></button>
+    ${N.enabled ? `<div class="cap">Попереджати за</div><div class="seg">${[15, 30, 60].map(m => `<button data-act="nlead" data-v="${m}" aria-pressed="${N.lead === m}">${m === 60 ? '1 год' : m + ' хв'}</button>`).join('')}</div>
+    <div class="list" style="background:var(--surface-2)">${tg('before', 'Перед відключенням')}${tg('restore', 'Перед відновленням')}${tg('change', 'Графік змінено', 'Що саме змінилось: було → стало')}${tg('tomorrow', 'Опубліковано графік на завтра')}</div>
+    <button class="btn secondary" data-act="ntest">Надіслати тестове сповіщення</button>` : `<div class="body-s">Попередимо перед відключенням і відновленням, повідомимо про зміни графіка й публікацію графіка на завтра.</div>`}`;
+  }
   openSheet(body + `<button class="btn ghost" data-act="close">Закрити</button>`);
+}
+async function pushSub(create) {
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub && create) { const { key } = await (await fetch(`${API}api/vapid`)).json(); sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: (k => { k = k.replace(/-/g, '+').replace(/_/g, '/'); while (k.length % 4) k += '='; return Uint8Array.from(atob(k), c => c.charCodeAt(0)); })(key) }); }
+  return sub;
+}
+async function syncPush() {
+  if (!S.notify.enabled || !API_READY) return;
+  try { const sub = await pushSub(false); if (!sub) return;
+    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, addrs: S.addresses.map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name })) }) });
+  } catch {}
 }
 
 // ---------- Події ----------
@@ -322,24 +343,31 @@ document.addEventListener('click', async e => {
     case 'method-next': view = draft.method === 'address' ? 'ob-address' : 'ob-queue'; render(); break;
     case 'address-next': draft.street = document.getElementById('street').value.trim(); draft.house = document.getElementById('house').value.trim(); view = draft.autoQueue ? 'ob-confirm' : 'ob-queue'; render(); break;
     case 'queue': draft.queue = t.dataset.v; render(); break;
-    case 'queue-next': if (draft.editOf) { const a = S.addresses.find(x => x.id === draft.editOf); a.queue = draft.queue; save(); draft = null; view = 'edit'; toast('Чергу змінено'); } else view = 'ob-confirm'; render(); break;
+    case 'queue-next': if (draft.editOf) { const a = S.addresses.find(x => x.id === draft.editOf); a.queue = draft.queue; save(); syncPush(); draft = null; view = 'edit'; toast('Чергу змінено'); } else view = 'ob-confirm'; render(); break;
     case 'dname': draft.name = t.dataset.v; render(); break;
     case 'save': { const a = { id: uid(), name: draft.name, regionId: draft.regionId, city: draft.city, street: draft.street || '', house: draft.house || '', queue: draft.queue };
-      S.addresses.push(a); if (!S.primaryId) S.primaryId = a.id; S.currentId = a.id; save(); draft = null; view = 'home'; day = 0; await render(); toast(`Адресу «${a.name}» збережено`); break; }
+      S.addresses.push(a); if (!S.primaryId) S.primaryId = a.id; S.currentId = a.id; save(); syncPush(); draft = null; view = 'home'; day = 0; await render(); toast(`Адресу «${a.name}» збережено`); break; }
     case 'switcher': if (e.target.closest('[data-act=notif]')) { notifSheet(); break; } switcherSheet(); break;
     case 'notif': notifSheet(); break;
     case 'pick': if (e.target.closest('[data-act=edit]')) break; S.currentId = t.dataset.id; save(); closeSheet(); view = 'home'; day = 0; render(); break;
     case 'edit': editId = t.dataset.id; view = 'edit'; render(); break;
-    case 'rename': { const a = S.addresses.find(x => x.id === editId); a.name = t.dataset.v; save(); render(); break; }
+    case 'rename': { const a = S.addresses.find(x => x.id === editId); a.name = t.dataset.v; save(); syncPush(); render(); break; }
     case 'primary': S.primaryId = editId; save(); render(); break;
     case 'requeue': { const a = S.addresses.find(x => x.id === editId); draft = { regionId: a.regionId, queue: a.queue, editOf: a.id, method: 'queue' }; view = 'ob-queue'; render(); break; }
     case 'delete': { const a = S.addresses.find(x => x.id === editId); if (!confirm(`Видалити «${a.name}»? Адресу буде видалено з цього пристрою.`)) break;
-      S.addresses = S.addresses.filter(x => x.id !== editId); if (S.primaryId === editId) S.primaryId = S.addresses[0]?.id || null; if (S.currentId === editId) S.currentId = S.primaryId; save(); view = S.addresses.length ? 'addresses' : 'welcome'; render(); toast('Адресу видалено'); break; }
+      S.addresses = S.addresses.filter(x => x.id !== editId); if (S.primaryId === editId) S.primaryId = S.addresses[0]?.id || null; if (S.currentId === editId) S.currentId = S.primaryId; save(); syncPush(); view = S.addresses.length ? 'addresses' : 'welcome'; render(); toast('Адресу видалено'); break; }
     case 'seg': segSheet(+t.dataset.i); break;
     case 'theme': themeSheet(); break;
     case 'settheme': S.theme = t.dataset.v; save(); closeSheet(); render(); break;
     case 'sources': sourcesSheet(); break;
     case 'clearcache': clearScheduleCache(); if ('caches' in window) { const k = await caches.keys(); await Promise.all(k.filter(x => x.includes('data')).map(x => caches.delete(x))); } toast('Графіки оновлено'); render(); break;
+    case 'npush': try {
+        if (!S.notify.enabled) { const p = await Notification.requestPermission(); if (p !== 'granted') { notifSheet(); break; } await pushSub(true); S.notify.enabled = true; save(); await syncPush(); toast('Сповіщення увімкнено'); }
+        else { const sub = await pushSub(false); if (sub) { await fetch(`${API}api/push/unsubscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); } S.notify.enabled = false; save(); toast('Сповіщення вимкнено'); }
+      } catch (err) { toast('Не вдалося: ' + (err.message || err)); } notifSheet(); render(); break;
+    case 'nlead': S.notify.lead = +t.dataset.v; save(); syncPush(); notifSheet(); break;
+    case 'ntype': S.notify.types[t.dataset.k] = S.notify.types[t.dataset.k] === false; save(); syncPush(); notifSheet(); break;
+    case 'ntest': { const sub = await pushSub(false); if (!sub) break; const r = await fetch(`${API}api/push/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).then(r => r.json()).catch(() => ({})); toast(r.ok ? 'Надіслано — перевірте сповіщення' : 'Не вдалося надіслати'); break; }
     case 'askperm': if (Notification.permission !== 'granted') { const p = await Notification.requestPermission(); S.notify.enabled = p === 'granted'; save(); } closeSheet(); render(); break;
   }
 });
@@ -363,6 +391,15 @@ setInterval(() => {
   if (left <= 0) { render(); return; }
   el.textContent = cd(left);
 }, 1000);
+
+// Лічильник встановлень: перший запуск встановленого застосунку (на iOS немає події appinstalled)
+try {
+  if ((matchMedia('(display-mode: standalone)').matches || navigator.standalone) && !localStorage.getItem('ec.counted') && API_READY) {
+    const ua = navigator.userAgent, platform = /iPhone|iPad|iPod/.test(ua) ? 'ios' : /Android/.test(ua) ? 'android' : /Macintosh/.test(ua) ? 'mac' : /Windows/.test(ua) ? 'windows' : 'other';
+    if (!localStorage.getItem('ec.installed')) fetch(`${API}api/stats/install`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ platform }) }).catch(() => {});
+    localStorage.setItem('ec.counted', '1');
+  }
+} catch {}
 
 // Прелоадер: анімація іконки 3 с, потім плавно зникає (застосунок рендериться під ним)
 const pre = document.getElementById('pre');
@@ -390,8 +427,19 @@ function initAddress() {
     } catch { res.innerHTML = `<div class="banner err">${ic('alert')}<div><div class="bt">Сервіс оператора не відповідає</div><div class="bb">Оберіть чергу вручну.</div></div></div>`; }
   };
   let houseTA = null;
-  const setupHouse = () => { const src = houseSource(r, draft); if (src && !houseTA) houseTA = attachTypeahead(hs, src, it => { draft.house = it.label; lookup(it.id); }, { minChars: 0, emptyText: 'Такого номера немає в довіднику оператора' }); };
-  attachTypeahead(st, streetSource(r, draft), it => { draft.street = it.label; draft.streetId = it.id || null; draft.house = ''; hs.value = ''; res.innerHTML = ''; draft.autoQueue = false; setupHouse(); hs.focus(); }, { minChars: draft.nsId ? 0 : 1 });
+  const found = (q, by) => { draft.queue = q; draft.autoQueue = true;
+    res.innerHTML = `<div class="card" style="background:var(--on-soft);box-shadow:none;gap:8px"><div style="display:flex;gap:10px;align-items:center;font-weight:600;color:var(--on-ink)">${ic('check')}Вашу адресу знайдено</div><div style="display:flex;gap:8px;align-items:baseline"><span class="body-s">Черга</span><span class="mono" style="font-size:20px;font-weight:600">${esc(q)}</span></div><div class="source ok">${ic('shield')}Визначено за даними ${esc(by)}</div></div>`;
+    next.textContent = 'Продовжити'; };
+  const notFound = why => { draft.autoQueue = false; res.innerHTML = `<div class="banner warn">${ic('alert')}<div><div class="bt">Чергу не вдалося визначити автоматично</div><div class="bb">${why} Оберіть чергу вручну на наступному кроці.</div></div></div>`; next.textContent = 'Обрати чергу вручну'; };
+  let houseSrc = null;
+  const setupHouse = () => { houseSrc = houseSource(r, draft);
+    if (houseSrc && !houseTA) houseTA = attachTypeahead(hs, q => houseSrc ? houseSrc(q) : Promise.resolve([]), it => {
+      draft.house = it.label;
+      if (it.id) return lookup(it.id);
+      if (it.queues) { const q = it.queues.find(x => /^\d\.\d$/.test(x)); return q ? found(q, r.opName) : notFound('Оператор не вказав чергу для цього будинку.'); }
+    }, { minChars: 0, emptyText: 'Такого номера немає в довіднику оператора' }); };
+  attachTypeahead(st, streetSource(r, draft), it => { draft.street = it.label; draft.streetId = it.id || null; draft.house = ''; hs.value = ''; res.innerHTML = ''; draft.autoQueue = false; setupHouse(); hs.focus();
+    if (dtekAuto(r)) import('./address.js').then(m => m.dtekHouses(r.op, draft.city, draft.street)).catch(() => notFound('Сервіс ДТЕК зараз не відповідає.')); }, { minChars: draft.nsId ? 0 : 1 });
   st.addEventListener('input', () => { draft.streetId = null; draft.autoQueue = false; res.innerHTML = ''; });
   setupHouse();
   if (!draft.street) st.focus();

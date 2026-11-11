@@ -1,0 +1,8 @@
+.git
+.github
+worker
+scripts
+wrangler.toml
+README.md
+node_modules
+.assetsignore
