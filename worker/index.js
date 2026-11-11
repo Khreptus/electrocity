@@ -41,7 +41,7 @@ export default {
       if (p === '/api/push/test' && req.method === 'POST') {
         const { endpoint } = await req.json(); const subs = await getSubs(env); const s = subs[await idOf(endpoint)];
         if (!s) return json({ ok: false, error: 'not subscribed' }, 404);
-        const r = await sendPush(env, s.sub, { title: 'Electrocity', body: 'Сповіщення працюють ✓', tag: 'test' });
+        const r = await sendPush(env, s.sub, localize({ title: 'Electrocity', body: 'Сповіщення працюють ✓', tag: 'test' }, s.lang));
         return json({ ok: r.ok, status: r.status });
       }
       if (p === '/api/dtek/houses') return json(await dtekHouses(url.searchParams, ctx), 200, { 'Cache-Control': 'public, max-age=3600' });
@@ -117,7 +117,7 @@ async function tick(env, manual = false) {
   }
   let dead = false;
   await Promise.all(outbox.map(async o => {
-    const r = await sendPush(env, subs[o.id].sub, o.msg).catch(() => ({ status: 0 }));
+    const r = await sendPush(env, subs[o.id].sub, localize(o.msg, subs[o.id].lang)).catch(() => ({ status: 0 }));
     if (r.status === 404 || r.status === 410) { delete subs[o.id]; dead = true; }
   }));
   if (dead) await env.KV.put('subs', JSON.stringify(subs));
@@ -169,6 +169,27 @@ function reminder(data, a, lead, now, t) {
   return null;
 }
 
+// ---------- переклад сповіщень (en/de) ----------
+const L10N = {
+  en: [[/Сповіщення працюють ✓/, 'Notifications work ✓'], [/графік на сьогодні змінено/, 'today’s schedule changed'], [/графік на завтра змінено/, 'tomorrow’s schedule changed'],
+    [/графік на (\S+) змінено/, 'schedule for $1 changed'], [/графік на сьогодні/, 'schedule for today'], [/графік на завтра/, 'schedule for tomorrow'], [/графік на (\S+)/, 'schedule for $1'],
+    [/Відключень не заплановано/, 'No outages planned'], [/Відключення: /, 'Outages: '], [/ · разом /, ' · total '], [/Тепер: /, 'Now: '], [/\. Було: /, '. Before: '],
+    [/відключення через (\d+) хв/, 'outage in $1 min'], [/світло через (\d+) хв/, 'power back in $1 min'], [/За графіком відновлення о /, 'Scheduled to return at '],
+    [/За графіком /, 'Scheduled '], [/ · черга /, ' · queue '], [/(\d+) год/g, '$1 h'], [/(\d+) хв/g, '$1 min'],
+    [/^Дім/, 'Home'], [/^Робота/, 'Work'], [/^Батьки/, 'Parents'], [/^Дача/, 'Cottage'], [/^Інше/, 'Other'], [/^Адреса/, 'Address']],
+  de: [[/Сповіщення працюють ✓/, 'Benachrichtigungen funktionieren ✓'], [/графік на сьогодні змінено/, 'Plan für heute geändert'], [/графік на завтра змінено/, 'Plan für morgen geändert'],
+    [/графік на (\S+) змінено/, 'Plan für $1 geändert'], [/графік на сьогодні/, 'Plan für heute'], [/графік на завтра/, 'Plan für morgen'], [/графік на (\S+)/, 'Plan für $1'],
+    [/Відключень не заплановано/, 'Keine Abschaltungen geplant'], [/Відключення: /, 'Abschaltungen: '], [/ · разом /, ' · gesamt '], [/Тепер: /, 'Jetzt: '], [/\. Було: /, '. Vorher: '],
+    [/відключення через (\d+) хв/, 'Abschaltung in $1 Min.'], [/світло через (\d+) хв/, 'Strom zurück in $1 Min.'], [/За графіком відновлення о /, 'Laut Plan zurück um '],
+    [/За графіком /, 'Laut Plan '], [/ · черга /, ' · Gruppe '], [/(\d+) год/g, '$1 Std.'], [/(\d+) хв/g, '$1 Min.'],
+    [/^Дім/, 'Zuhause'], [/^Робота/, 'Arbeit'], [/^Батьки/, 'Eltern'], [/^Дача/, 'Datscha'], [/^Інше/, 'Andere'], [/^Адреса/, 'Adresse']],
+};
+function localize(msg, lang) {
+  const rules = L10N[lang]; if (!rules) return msg;
+  const t = x => rules.reduce((a, [re, to]) => a.replace(re, to), String(x || ''));
+  return { ...msg, title: t(msg.title), body: t(msg.body) };
+}
+
 // ---------- підписки ----------
 async function idOf(endpoint) {
   const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
@@ -176,12 +197,12 @@ async function idOf(endpoint) {
 }
 async function getSubs(env) { return JSON.parse(await env.KV.get('subs') || '{}'); }
 async function subscribe(env, body) {
-  const { subscription, addrs, lead, types } = body || {};
+  const { subscription, addrs, lead, types, lang } = body || {};
   if (!subscription?.endpoint || !subscription?.keys?.p256dh) throw new Error('bad subscription');
   const clean = (addrs || []).slice(0, 10).map(a => ({ op: String(a.op).slice(0, 20), queue: String(a.queue).slice(0, 8), name: String(a.name || 'Адреса').slice(0, 20) }));
   const subs = await getSubs(env);
   const id = await idOf(subscription.endpoint);
-  const next = { sub: { endpoint: subscription.endpoint, keys: subscription.keys }, addrs: clean, lead: [15, 30, 60].includes(+lead) ? +lead : 30, types: types || {} };
+  const next = { sub: { endpoint: subscription.endpoint, keys: subscription.keys }, addrs: clean, lead: [15, 30, 60].includes(+lead) ? +lead : 30, types: types || {}, lang: ['en', 'de'].includes(lang) ? lang : 'uk' };
   if (JSON.stringify(subs[id]) === JSON.stringify(next)) return { ok: true, id, unchanged: true };
   subs[id] = next;
   await env.KV.put('subs', JSON.stringify(subs));

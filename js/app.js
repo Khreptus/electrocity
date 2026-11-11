@@ -1,3 +1,4 @@
+import { setLang, LANGS, detectLang, locale, tr } from './i18n.js';
 import { ic, STATE_ICON } from './icons.js';
 import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, skel } from './address.js';
 import { API, API_READY } from './config.js';
@@ -7,6 +8,7 @@ import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearSchedu
 const KEY = 'svitlo.v1';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
 let S = Object.assign({ addresses: [], primaryId: null, currentId: null, theme: 'system', notify: { before: 30, enabled: false } }, load());
+S.lang ||= detectLang(); setLang(S.lang);
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const cur = () => S.addresses.find(a => a.id === S.currentId) || S.addresses.find(a => a.id === S.primaryId) || S.addresses[0];
@@ -123,7 +125,7 @@ function evRow(s, min, isToday) {
 }
 function sourceLine(data, a) {
   if (data.demo) return `<div class="source warn">${ic('info')}Демо-дані · джерело ${esc(region(a.regionId)?.opName)} ще не підключене</div>`;
-  const t = data.updatedAt ? new Date(data.updatedAt).toLocaleString('uk-UA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
+  const t = data.updatedAt ? new Date(data.updatedAt).toLocaleString(locale(), { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
   const when = data.live ? 'дані в реальному часі' : data.publishedAt ? `опубліковано ${esc(data.publishedAt)}` : t ? `оновлено ${t}` : '';
   return `<a class="source ok" href="${esc(data.source?.url || '#')}" target="_blank" rel="noopener">${ic('shield')}${esc(data.name || region(a.regionId)?.opName)} · ${when} ${ic('external')}</a>`;
 }
@@ -203,7 +205,7 @@ function settings() {
   const perm = 'Notification' in window ? Notification.permission : 'unsupported';
   return `<div class="band"><span class="h-l">Налаштування</span></div><section class="sheet r32">
    <div class="over">Основне</div><div class="list">${li('notif', 'bell', 'Сповіщення', S.notify.enabled ? 'Увімкнено' : perm === 'denied' ? 'Заборонено в системі' : 'Вимкнено', '')}</div>
-   <div class="over">Вигляд</div><div class="list">${li('theme', 'moon', 'Тема', null, th)}${li('noop', 'globe', 'Мова', null, 'Українська', '')}</div>
+   <div class="over">Вигляд</div><div class="list">${li('theme', 'moon', 'Тема', null, th)}${li('lang', 'globe', 'Мова', null, `<span data-noi18n>${LANGS[S.lang]}</span>`)}</div>
    <div class="over">Поділитися</div><div class="list"><a class="li" href="install/"><span class="lt">${ic('share')}</span><span class="tx"><span class="tt">Сторінка встановлення</span><br><span class="st">Надішліть друзям — iPhone, Android, Mac</span></span>${ic('chevron-right', 'chev')}</a></div>
    <div class="over">Віджет</div><div class="list"><a class="li" href="widget/"><span class="lt">${ic('grid')}</span><span class="tx"><span class="tt">Віджет для iPhone</span><br><span class="st">Статус і таймер на головному екрані</span></span>${ic('chevron-right', 'chev')}</a></div>
    <div class="over">Дані</div><div class="list">${li('sources', 'shield', 'Джерела даних', 'Офіційні оператори')}${li('clearcache', 'database', 'Оновити графіки', 'Скинути збережені дані графіків', '', '')}</div>
@@ -334,7 +336,7 @@ async function pushSub(create) {
 async function syncPush() {
   if (!S.notify.enabled || !API_READY) return;
   try { const sub = await pushSub(false); if (!sub) return;
-    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, addrs: S.addresses.map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name })) }) });
+    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, lang: S.lang, addrs: S.addresses.map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name })) }) });
   } catch {}
 }
 
@@ -366,10 +368,12 @@ document.addEventListener('click', async e => {
     case 'rename': { const a = S.addresses.find(x => x.id === editId); a.name = t.dataset.v; save(); syncPush(); render(); break; }
     case 'primary': S.primaryId = editId; save(); render(); break;
     case 'requeue': { const a = S.addresses.find(x => x.id === editId); draft = { regionId: a.regionId, queue: a.queue, editOf: a.id, method: 'queue' }; view = 'ob-queue'; render(); break; }
-    case 'delete': { const a = S.addresses.find(x => x.id === editId); if (!confirm(`Видалити «${a.name}»? Адресу буде видалено з цього пристрою.`)) break;
+    case 'delete': { const a = S.addresses.find(x => x.id === editId); if (!confirm(tr(`Видалити «${a.name}»? Адресу буде видалено з цього пристрою.`))) break;
       S.addresses = S.addresses.filter(x => x.id !== editId); if (S.primaryId === editId) S.primaryId = S.addresses[0]?.id || null; if (S.currentId === editId) S.currentId = S.primaryId; save(); syncPush(); view = S.addresses.length ? 'addresses' : 'welcome'; render(); toast('Адресу видалено'); break; }
     case 'seg': segSheet(+t.dataset.i); break;
     case 'theme': themeSheet(); break;
+    case 'lang': openSheet(`<div class="h-s" style="font-size:22px">Мова</div><div class="list" style="background:var(--surface-2)" data-noi18n>${Object.entries(LANGS).map(([k, l]) => `<button class="li" data-act="setlang" data-v="${k}"><span class="tx"><span class="tt">${l}</span></span>${S.lang === k ? ic('check', '" style="color:var(--accent)') : ''}</button>`).join('')}</div>`); break;
+    case 'setlang': S.lang = t.dataset.v; save(); setLang(S.lang); closeSheet(); render(); syncPush(); break;
     case 'settheme': S.theme = t.dataset.v; save(); closeSheet(); render(); break;
     case 'sources': sourcesSheet(); break;
     case 'clearcache': clearScheduleCache(); if ('caches' in window) { const k = await caches.keys(); await Promise.all(k.filter(x => x.includes('data')).map(x => caches.delete(x))); } toast('Графіки оновлено'); render(); break;
