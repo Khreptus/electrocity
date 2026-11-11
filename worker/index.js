@@ -57,6 +57,12 @@ export default {
       if (p === '/api/badge/installs') { const st = JSON.parse(await env.KV.get('stats') || '{"installs":0}');
         return json({ schemaVersion: 1, label: 'встановлень', message: String(st.installs), color: 'E39A0B', labelColor: '1B1B1B' }, 200, { 'Cache-Control': 'max-age=300' }); }
       if (p === '/api/status') return json({ ok: true, ...(JSON.parse(await env.KV.get('status') || '{}')) });
+      if (p === '/api/tick') { // ручний запуск збору, не частіше разу на хвилину
+        const lockKey = new Request('https://lock.local/tick'); const c = caches.default;
+        if (await c.match(lockKey)) return json({ error: 'too soon' }, 429);
+        await c.put(lockKey, new Response('1', { headers: { 'Cache-Control': 'max-age=60' } }));
+        const t0 = Date.now(); const st = await tick(env, true); return json({ ms: Date.now() - t0, status: st });
+      }
       if (p.startsWith('/api/')) return json({ error: 'not found' }, 404);
     } catch (e) { return json({ error: String(e.message || e) }, 500); }
     return env.ASSETS.fetch(req);
@@ -68,7 +74,7 @@ export default {
 };
 
 // ---------- збір + сповіщення (щохвилини) ----------
-async function tick(env) {
+async function tick(env, manual = false) {
   const now = kyiv();
   const status = {};
   const changes = [];
@@ -94,9 +100,10 @@ async function tick(env) {
   // статус пишемо рідко (ліміт записів KV): раз на 30 хв або при помилці
   if (now.min % 30 === 0 || Object.values(status).some(s => !s.ok)) await env.KV.put('status', JSON.stringify(status)).catch(() => {});
 
+  if (manual) return status;
   const subs = await getSubs(env);
   const ids = Object.keys(subs);
-  if (!ids.length) return;
+  if (!ids.length) return status;
   const outbox = [];
   for (const id of ids) {
     const s = subs[id];
