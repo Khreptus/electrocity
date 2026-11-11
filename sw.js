@@ -1,5 +1,5 @@
 // Service worker: оболонка — cache-first, графіки — network-first з резервом у кеші.
-const VERSION = 'v0.3.3';
+const VERSION = 'v0.4.0';
 const SHELL = `shell-${VERSION}`;
 const DATA = 'data-v1';
 const FILES = [
@@ -26,7 +26,7 @@ self.addEventListener('fetch', e => {
 });
 // Web Push (сервер підключимо пізніше)
 self.addEventListener('push', e => {
-  const d = e.data ? e.data.json() : { title: 'Світло', body: 'Оновлення графіка' };
+  const d = e.data ? e.data.json() : { title: 'Electrocity', body: 'Оновлення графіка' };
   e.waitUntil(self.registration.showNotification(d.title, { body: d.body, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: d.tag, data: d.url || './' }));
 });
 self.addEventListener('notificationclick', e => { e.notification.close(); e.waitUntil(clients.openWindow(e.notification.data || './')); });

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Віджет Electrocity для iPhone</title>
+<meta name="theme-color" content="#1B1B1B">
+<link rel="icon" href="../icons/icon-32.png">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+ body{background:var(--stage-bg)} main{max-width:560px;margin:0 auto;background:var(--bg);min-height:100dvh}
+ .stage{padding-bottom:56px}.lamp-space{height:232px}
+ ol{display:flex;flex-direction:column;gap:12px;list-style:none;counter-reset:s}
+ ol li{counter-increment:s;display:flex;gap:12px;align-items:flex-start;background:var(--surface);border-radius:16px;padding:14px}
+ ol li::before{content:counter(s);flex:none;width:26px;height:26px;border-radius:50%;background:var(--inverse-bg);color:var(--inverse-text);display:grid;place-items:center;font-size:13px;font-weight:600}
+ select,input{font:inherit;font-size:16px;border:0;background:none;outline:none;flex:1;color:var(--text)}
+ code{font-family:var(--mono);font-size:13px;background:var(--surface-2);padding:2px 6px;border-radius:6px;word-break:break-all}
+ .copied{background:var(--on)!important}
+</style>
+</head>
+<body>
+<main>
+ <section class="stage" data-state="on"><div class="glow"></div><img class="lamp off" src="../assets/lamp-off.webp" alt=""><img class="lamp on" src="../assets/lamp-on.webp" alt="">
+  <div class="lamp-space"></div>
+  <h1 style="font-size:28px;line-height:34px;font-weight:600">Віджет Electrocity <span style="color:var(--light)">для iPhone</span></h1>
+  <p style="color:var(--stage-text-2);margin-top:10px">Статус, таймер до відключення і шкала доби — на головному екрані. Безкоштовно, через застосунок Scriptable.</p>
+ </section>
+ <section class="sheet" style="gap:16px">
+  <div class="card">
+   <div class="h-s">Ваша адреса</div>
+   <label class="field sel"><span class="cap3" style="width:96px">Область</span><select id="op">
+    <option value="dtek-oem">Одеська</option><option value="dtek-dnem">Дніпропетровська (Дніпро, Кривий Ріг)</option><option value="hoe">Хмельницька</option><option value="moe">Миколаївська</option></select></label>
+   <label class="field sel"><span class="cap3" style="width:96px">Черга</span><select id="q"></select></label>
+   <label class="field"><span class="cap3" style="width:96px">Назва</span><input id="n" value="Дім" maxlength="14"></label>
+   <div class="cap">Параметр віджета: <code id="param">dtek-oem|3.2|Дім</code></div>
+  </div>
+  <ol>
+   <li><div>Встановіть безкоштовний застосунок <a class="link" href="https://apps.apple.com/app/scriptable/id1405459188">Scriptable</a> з App Store.</div></li>
+   <li><div style="display:flex;flex-direction:column;gap:10px;flex:1">Скопіюйте код віджета.<button class="btn primary" id="copy">Скопіювати код</button></div></li>
+   <li><div>У Scriptable натисніть <b>+</b>, вставте код, назвіть скрипт <b>Electrocity</b>.</div></li>
+   <li><div>На головному екрані: утримуйте палець → <b>+</b> → Scriptable → оберіть середній розмір → <b>Додати</b>.</div></li>
+   <li><div style="flex:1">Утримуйте віджет → <b>Редагувати віджет</b>: Script — <b>Electrocity</b>, Parameter — <button class="link" id="copyp">скопіювати параметр</button> і вставити.</div></li>
+  </ol>
+  <div class="banner info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg><div><div class="bt">Як часто оновлюється</div><div class="bb">Таймер іде щосекунди, а дані графіка iOS оновлює приблизно раз на 15 хв і в момент зміни статусу. Статус — за опублікованим графіком.</div></div></div>
+  <a class="btn secondary" href="../">Відкрити застосунок</a>
+ </section>
+</main>
+<script>
+const Q={'dtek-oem':1,'dtek-dnem':1,'hoe':1,'moe':1};
+const $=id=>document.getElementById(id);
+function fillQ(){const v=$('q').value||'3.2';$('q').innerHTML='';for(let g=1;g<=6;g++)for(const s of [1,2]){const o=new Option(`${g}.${s}`,`${g}.${s}`);$('q').add(o)}$('q').value=v;upd()}
+function upd(){$('param').textContent=`${$('op').value}|${$('q').value}|${$('n').value.trim()||'Дім'}`}
+['op','q','n'].forEach(id=>$(id).addEventListener('input',upd));fillQ();
+async function copy(text,btn,label){try{await navigator.clipboard.writeText(text)}catch{const t=document.createElement('textarea');t.value=text;document.body.append(t);t.select();document.execCommand('copy');t.remove()}const old=btn.textContent;btn.textContent=label;btn.classList.add('copied');setTimeout(()=>{btn.textContent=old;btn.classList.remove('copied')},1800)}
+let CODE='';fetch('svitlo.js',{cache:'no-store'}).then(r=>r.text()).then(t=>CODE=t);
+$('copy').onclick=e=>{if(!CODE)return;copy(CODE,e.target,'Скопійовано ✓')};
+$('copyp').onclick=e=>copy($('param').textContent,e.target,'скопійовано ✓');
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 {
-  "name": "Світло — графік відключень",
-  "short_name": "Світло",
+  "name": "Electrocity — графік відключень",
+  "short_name": "Electrocity",
   "description": "Графік відключень світла для вашої адреси по всій Україні.",
   "lang": "uk",
   "start_url": "./",

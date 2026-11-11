@@ -46,7 +46,7 @@ async function render() {
   const side = tabs || view === 'detail' ? await sidebar() : '';
   $app.innerHTML = side + `<div class="desk-wrap"><main class="view ${tabs ? '' : 'no-tabs'}">${html}</main></div>` + (tabs ? tabbar() : '');
   if (view === 'ob-address' && draft?.regionId && region(draft.regionId).addressLookup === 'moe') initMoe();
-  document.title = view === 'home' && cur() ? `${cur().name} · Світло` : 'Світло — графік відключень';
+  document.title = view === 'home' && cur() ? `${cur().name} · Electrocity` : 'Electrocity — графік відключень';
 }
 
 function tabbar() {
@@ -56,7 +56,7 @@ function tabbar() {
 async function sidebar() {
   const cards = await Promise.all(S.addresses.map(a => addrCard(a, true)));
   const n = (v, i, l) => `<button data-go="${v}" ${view === v ? 'aria-current="page"' : ''}>${ic(i)}${l}</button>`;
-  return `<aside class="side"><div class="brand"><img src="icons/icon-192.png" alt="" width="36" height="36" style="border-radius:10px">Світло</div>
+  return `<aside class="side"><div class="brand"><img src="icons/icon-192.png" alt="" width="36" height="36" style="border-radius:10px">Electrocity</div>
   <nav>${n('home', 'zap', 'Графік')}${n('addresses', 'map-pin', 'Мої адреси')}${n('settings', 'settings', 'Налаштування')}</nav>
   ${S.addresses.length ? '<div class="over" style="color:var(--stage-text-3)">Мої адреси</div>' : ''}${cards.join('')}</aside>`;
 }
@@ -201,6 +201,7 @@ function settings() {
   return `<div class="band"><span class="h-l">Налаштування</span></div><section class="sheet r32">
    <div class="over">Основне</div><div class="list">${li('notif', 'bell', 'Сповіщення', perm === 'granted' ? 'Дозволено' : perm === 'denied' ? 'Заборонено в системі' : 'Не налаштовано', '')}</div>
    <div class="over">Вигляд</div><div class="list">${li('theme', 'moon', 'Тема', null, th)}${li('noop', 'globe', 'Мова', null, 'Українська', '')}</div>
+   <div class="over">Віджет</div><div class="list"><a class="li" href="widget/"><span class="lt">${ic('grid')}</span><span class="tx"><span class="tt">Віджет для iPhone</span><br><span class="st">Статус і таймер на головному екрані</span></span>${ic('chevron-right', 'chev')}</a></div>
    <div class="over">Дані</div><div class="list">${li('sources', 'shield', 'Джерела даних', 'Офіційні оператори')}${li('clearcache', 'database', 'Оновити графіки', 'Скинути збережені дані графіків', '', '')}</div>
    <div class="over">Про застосунок</div><div class="list">${li('noop', 'lock', 'Конфіденційність', 'Без акаунта. Адреси зберігаються лише на цьому пристрої', '', '')}${li('noop', 'info', 'Версія', null, '0.1 (бета)', '')}</div></section>`;
 }
@@ -292,7 +293,7 @@ async function notifSheet() {
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
   let body;
   if (ios && !standalone) body = `<div class="h-s" style="font-size:22px">Додайте на початковий екран</div><div class="body-s">На iPhone сповіщення працюють лише для застосунку, встановленого на початковий екран (iOS 16.4+).</div>
-    <div class="list" style="background:var(--surface-2)">${[['share', 'Натисніть «Поділитися» в Safari'], ['plus', 'Оберіть «На початковий екран»'], ['bell', 'Відкрийте «Світло» з екрана й дозвольте сповіщення']].map(([i, t], n) => `<div class="li"><span class="lt">${n + 1}</span><span class="tx"><span class="tt" style="font-size:14px">${t}</span></span>${ic(i)}</div>`).join('')}</div>`;
+    <div class="list" style="background:var(--surface-2)">${[['share', 'Натисніть «Поділитися» в Safari'], ['plus', 'Оберіть «На початковий екран»'], ['bell', 'Відкрийте Electrocity з екрана й дозвольте сповіщення']].map(([i, t], n) => `<div class="li"><span class="lt">${n + 1}</span><span class="tx"><span class="tt" style="font-size:14px">${t}</span></span>${ic(i)}</div>`).join('')}</div>`;
   else if (!sup) body = `<div class="h-s" style="font-size:22px">Сповіщення недоступні</div><div class="body-s">Цей браузер не підтримує веб-сповіщення.</div>`;
   else if (Notification.permission === 'denied') body = `<div class="h-s" style="font-size:22px">Сповіщення вимкнено в системі</div><div class="body-s">Увімкніть їх у налаштуваннях браузера або системи для цього сайту.</div>`;
   else body = `<div class="h-s" style="font-size:22px">Не пропустіть відключення</div><div class="body-s">Попередимо за 30 хв до відключення й відновлення та повідомимо про зміни графіка. Сервер сповіщень підключаємо — дозвіл можна дати вже зараз.</div>
