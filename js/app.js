@@ -224,6 +224,15 @@ function welcome() {
     ${[['map-pin', 'Черга за адресою — без пошуку в таблицях'], ['bell', 'Попередження перед відключенням']].map(([i, t]) => `<div style="display:flex;gap:12px;align-items:center"><span style="width:32px;height:32px;border-radius:10px;background:var(--surface);display:grid;place-items:center;flex:none">${ic(i)}</span><span style="font-size:14px">${t}</span></div>`).join('')}
     <div style="flex:1"></div><div style="display:flex;flex-direction:column;gap:10px"><button class="btn primary" data-act="start">Налаштувати адресу</button><div class="cap3" style="text-align:center">Без реєстрації та номера телефону</div></div></section>`;
 }
+// Пошук області: за назвою, містом або оператором; «хмельницький» знаходить «Хмельницька»
+const rnorm = t => String(t || '').toLowerCase().replace(/[’'ʼ`]/g, '').replace(/[^a-zа-яіїєґ0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+function regionMatch(x, q) {
+  q = rnorm(q); if (!q) return true;
+  const hay = rnorm([x.name, x.opName, x.center, ...(x.cities || [])].join(' '));
+  if (hay.includes(q)) return true;
+  const stem = q.length >= 5 ? q.slice(0, -2) : null; // відкидаємо закінчення
+  return !!stem && hay.split(' ').some(w => w.startsWith(stem));
+}
 function manualReason(r) {
   if (r.op === 'hoe') return 'Черга визначається за офіційними списками адрес Хмельницькобленерго — оберіть населений пункт, вулицю й будинок зі списку підказок. Якщо адреси там немає, перевірте чергу на hoe.com.ua → «Перевірити чергу» і оберіть її тут.';
   if (r.op.startsWith('dtek-')) return 'Автовизначення черги для ДТЕК з’явиться після підключення сервера (вже в плані). Поки що черга вказана на сайті ДТЕК у розділі «Відключення» за вашою адресою.';
@@ -237,7 +246,7 @@ function onboarding() {
   const r = draft.regionId && region(draft.regionId);
   if (view === 'ob-region') return bk(back ? 'back-addresses' : 'welcome') + `<section class="sheet r32">${steps(1)}
     <label class="field">${ic('search')}<input id="q" placeholder="Пошук області" autocomplete="off" value="${esc(draft.q || '')}"></label>
-    <div class="list" id="rlist">${REGIONS.filter(x => !draft.q || x.name.toLowerCase().includes(draft.q.toLowerCase())).map(x => `<button class="li" data-act="region" data-id="${x.id}"><span class="tx"><span class="tt">${x.name}</span><br><span class="st">${x.opName}</span></span>${ic('chevron-right', 'chev')}</button>`).join('')}</div></section>`;
+    <div class="list" id="rlist">${REGIONS.filter(x => regionMatch(x, draft.q)).map(x => `<button class="li" data-act="region" data-id="${x.id}"><span class="tx"><span class="tt">${x.name}</span><br><span class="st">${x.opName}</span></span>${ic('chevron-right', 'chev')}</button>`).join('')}</div><div class="cap3" id="rnone" style="text-align:center;padding:16px" ${REGIONS.some(x => regionMatch(x, draft.q)) ? 'hidden' : ''}>Область не знайдено. Спробуйте назву міста, наприклад «Кривий Ріг».</div></section>`;
   if (view === 'ob-city') return bk('ob-region') + `<section class="sheet r32">${steps(2)}<div class="cap">${esc(r.name)} · ${esc(r.opName)}</div>
     <label class="field">${ic('search')}<input id="city" placeholder="Почніть вводити назву" value="${esc(draft.city || '')}" autocomplete="off" autocapitalize="words" enterkeyhint="next"></label>
     <div class="body-s">Оберіть зі списку або введіть назву повністю.</div>
@@ -372,8 +381,9 @@ document.addEventListener('click', async e => {
   }
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'q') { draft.q = e.target.value; const list = document.getElementById('rlist'); const q = draft.q.toLowerCase();
-    list.querySelectorAll('.li').forEach(li => { li.hidden = !li.textContent.toLowerCase().includes(q); }); }
+  if (e.target.id === 'q') { draft.q = e.target.value; const list = document.getElementById('rlist'); let n = 0;
+    list.querySelectorAll('.li').forEach(li => { const ok = regionMatch(REGIONS.find(x => x.id === li.dataset.id), draft.q); li.hidden = !ok; n += ok; });
+    document.getElementById('rnone').hidden = n > 0; }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); if (e.key === 'Enter' && e.target.matches('[role=button]')) e.target.click(); });
 addEventListener('online', render); addEventListener('offline', render);
