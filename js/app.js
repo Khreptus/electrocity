@@ -436,7 +436,12 @@ function initAddress() {
     if (houseSrc && !houseTA) houseTA = attachTypeahead(hs, q => houseSrc ? houseSrc(q) : Promise.resolve([]), it => {
       draft.house = it.label;
       if (it.id) return lookup(it.id);
-      if (it.queues) { const q = it.queues.find(x => /^\d\.\d$/.test(x)); return q ? found(q, r.opName) : notFound('Оператор не вказав чергу для цього будинку.'); }
+      if (it.queues) { const qs = [...new Set(it.queues.filter(x => /^\d\.\d$/.test(x)))];
+        if (!qs.length) return notFound('Оператор не вказав чергу для цього будинку.');
+        if (qs.length === 1) return found(qs[0], r.opName);
+        draft.autoQueue = false; next.textContent = 'Обрати чергу вручну';
+        res.innerHTML = `<div class="banner warn">${ic('alert')}<div><div class="bt">Будинок у кількох чергах</div><div class="bb">За даними ${esc(r.opName)} різні під’їзди чи лінії цього будинку мають різні черги. Свою чергу можна дізнатися в рахунку або особовому кабінеті. Оберіть її:</div></div></div><div class="qgrid c3">${qs.map(q => `<button class="qcell" data-mq="${q}">${q}</button>`).join('')}</div>`;
+        res.querySelectorAll('[data-mq]').forEach(b => b.onclick = () => found(b.dataset.mq, r.opName)); return; }
     }, { minChars: 0, emptyText: 'Такого номера немає в довіднику оператора' }); };
   attachTypeahead(st, streetSource(r, draft), it => { draft.street = it.label; draft.streetId = it.id || null; draft.house = ''; hs.value = ''; res.innerHTML = ''; draft.autoQueue = false; setupHouse(); hs.focus();
     if (dtekAuto(r)) import('./address.js').then(m => m.dtekHouses(r.op, draft.city, draft.street)).catch(() => notFound('Сервіс ДТЕК зараз не відповідає.'));
