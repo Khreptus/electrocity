@@ -234,8 +234,7 @@ function regionMatch(x, q) {
   if (stem && hay.split(' ').some(w => w.startsWith(stem))) return true;
   // російською: «Николаев», «Кривой Рог», «Хмельницкий»
   const sq = skel(q.replace(/^никола/, 'микола')); if (sq.replace(/\*/g, '').length < 2) return false;
-  const sStem = q.length >= 5 ? skel(q.replace(/^никола/, 'микола').slice(0, -2)) : sq;
-  return hay.split(' ').some(w => { const sw = skel(w); return sw.startsWith(sq) || sw.startsWith(sStem); });
+  return (' ' + skel(hay)).includes(' ' + sq); // з початку слова, можна кілька слів («Кривой Рог»)
 }
 function manualReason(r) {
   if (r.op === 'hoe') return 'Черга визначається за офіційними списками адрес Хмельницькобленерго — оберіть населений пункт, вулицю й будинок зі списку підказок. Якщо адреси там немає, перевірте чергу на hoe.com.ua → «Перевірити чергу» і оберіть її тут.';
