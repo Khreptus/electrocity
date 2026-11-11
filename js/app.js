@@ -1,4 +1,5 @@
 import { ic, STATE_ICON } from './icons.js';
+import { citySource, streetSource, houseSource, attachTypeahead } from './address.js';
 import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr } from './data.js';
 
 // ---------- Стан ----------
@@ -45,7 +46,8 @@ async function render() {
   else if (view === 'settings') html = settings();
   const side = tabs || view === 'detail' ? await sidebar() : '';
   $app.innerHTML = side + `<div class="desk-wrap"><main class="view ${tabs ? '' : 'no-tabs'}">${html}</main></div>` + (tabs ? tabbar() : '');
-  if (view === 'ob-address' && draft?.regionId && region(draft.regionId).addressLookup === 'moe') initMoe();
+  if (view === 'ob-city') initCity();
+  if (view === 'ob-address') initAddress();
   document.title = view === 'home' && cur() ? `${cur().name} · Electrocity` : 'Electrocity — графік відключень';
 }
 
@@ -229,24 +231,19 @@ function onboarding() {
     <label class="field">${ic('search')}<input id="q" placeholder="Пошук області" autocomplete="off" value="${esc(draft.q || '')}"></label>
     <div class="list" id="rlist">${REGIONS.filter(x => !draft.q || x.name.toLowerCase().includes(draft.q.toLowerCase())).map(x => `<button class="li" data-act="region" data-id="${x.id}"><span class="tx"><span class="tt">${x.name}</span><br><span class="st">${x.opName}</span></span>${ic('chevron-right', 'chev')}</button>`).join('')}</div></section>`;
   if (view === 'ob-city') return bk('ob-region') + `<section class="sheet r32">${steps(2)}<div class="cap">${esc(r.name)} · ${esc(r.opName)}</div>
-    <label class="field">${ic('search')}<input id="city" placeholder="Назва міста чи села" value="${esc(draft.city || '')}" autocomplete="off"></label>
-    <div class="list">${(r.cities || [r.center]).map(c => `<button class="li" data-act="city" data-v="${esc(c)}"><span class="lt">${ic('map-pin')}</span><span class="tx"><span class="tt">${esc(c)}</span></span>${ic('chevron-right', 'chev')}</button>`).join('')}</div>
-    <div class="body-s">Немає у списку? Введіть назву вручну.</div>
+    <label class="field">${ic('search')}<input id="city" placeholder="Почніть вводити назву" value="${esc(draft.city || '')}" autocomplete="off" autocapitalize="words" enterkeyhint="next"></label>
+    <div class="body-s">Оберіть зі списку або введіть назву повністю.</div>
     <div style="flex:1"></div><button class="btn primary" data-act="city-next">Продовжити</button></section>`;
   if (view === 'ob-method') return bk('ob-city') + `<section class="sheet r32">${steps(3)}<div class="h-l">Як визначити ваш графік?</div>
     <button class="opt" data-act="method" data-v="address" aria-pressed="${draft.method === 'address'}"><span class="ot">${ic('map-pin')}</span><span><span class="h-s">За адресою</span><br><span class="body-s">Вкажіть вулицю й будинок — чергу визначимо автоматично, щойно оператор це підтримає</span></span></button>
     <button class="opt" data-act="method" data-v="queue" aria-pressed="${draft.method === 'queue'}"><span class="ot">${ic('grid')}</span><span><span class="h-s">Я знаю свою чергу</span><br><span class="body-s">Оберіть чергу або підчергу зі списку оператора</span></span></button>
     <div style="flex:1"></div><button class="btn primary" data-act="method-next">Продовжити</button></section>`;
-  if (view === 'ob-address' && r.addressLookup === 'moe') return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(r.opName)} · пошук черги за адресою</div>
-    ${[['m-fil', 'Дільниця'], ['m-ns', 'Населений пункт'], ['m-st', 'Вулиця'], ['m-dom', 'Будинок']].map(([id, l]) => `<label class="field sel"><span class="cap3" style="width:96px">${l}</span><select id="${id}" disabled><option>Завантаження…</option></select></label>`).join('')}
-    <div id="m-res"></div>
-    <button class="link" data-act="method" data-v="queue" style="align-self:flex-start">Обрати чергу вручну ${ic('chevron-right')}</button>
-    <div style="flex:1"></div><button class="btn primary" id="m-next" data-act="moe-next" disabled>Продовжити</button></section>`;
-  if (view === 'ob-address') return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
-    <label class="field">${ic('search')}<input id="street" placeholder="Вулиця" value="${esc(draft.street || '')}" autocomplete="street-address"></label>
-    <label class="field">${ic('home')}<input id="house" placeholder="Будинок" value="${esc(draft.house || '')}" inputmode="text"></label>
-    <div class="banner info">${ic('info')}<div><div class="bt">Пошук черги за адресою для цього оператора ще не підключений</div><div class="bb">Адресу збережемо, а чергу оберіть вручну — вона вказана в особовому кабінеті оператора або в рахунку.</div></div></div>
-    <div style="flex:1"></div><button class="btn primary" data-act="address-next">Обрати чергу</button></section>`;
+  if (view === 'ob-address') { const auto = r.addressLookup === 'moe' && draft.nsId; return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
+    <label class="field">${ic('search')}<input id="street" placeholder="Вулиця — почніть вводити" value="${esc(draft.street || '')}" autocomplete="off" enterkeyhint="next"></label>
+    <label class="field">${ic('home')}<input id="house" placeholder="Номер будинку" value="${esc(draft.house || '')}" autocomplete="off" enterkeyhint="done"></label>
+    <div id="addr-res"></div>
+    ${auto ? '' : `<div class="banner info">${ic('info')}<div><div class="bt">Пошук черги за адресою для цього оператора ще не підключений</div><div class="bb">Адресу збережемо, а чергу оберіть на наступному кроці — вона вказана в особовому кабінеті оператора або в рахунку.</div></div></div>`}
+    <div style="flex:1"></div><button class="btn primary" id="addr-next" data-act="address-next">${auto ? 'Обрати чергу вручну' : 'Обрати чергу'}</button></section>`; }
   if (view === 'ob-queue') { const ql = queueList(r.queues); return bk(draft.method === 'address' ? 'ob-address' : 'ob-method') + `<section class="sheet r32">${steps(4)}<div class="h-l">Оберіть чергу</div><div class="body-s">Черги ${esc(r.opName)}</div>
     <div class="qgrid ${r.queues.type === 'plain' ? 'c3' : ''}">${ql.map(q => `<button class="qcell" data-act="queue" data-v="${q}" aria-pressed="${draft.queue === q}">${q}</button>`).join('')}</div>
     <div style="flex:1"></div><button class="btn primary" data-act="queue-next" ${draft.queue ? '' : 'disabled'}>${draft.queue ? 'Обрати ' + draft.queue : 'Оберіть чергу'}</button></section>`; }
@@ -313,12 +310,10 @@ document.addEventListener('click', async e => {
     case 'close': closeSheet(); break;
     case 'start': case 'add': closeSheet(); draft = { method: 'address', name: S.addresses.some(a => a.name === 'Дім') ? 'Робота' : 'Дім' }; view = 'ob-region'; render(); break;
     case 'region': draft.regionId = t.dataset.id; draft.city = ''; draft.queue = null; view = 'ob-city'; render(); break;
-    case 'city': draft.city = t.dataset.v; view = 'ob-method'; render(); break;
-    case 'city-next': { const v = document.getElementById('city').value.trim(); if (!v) { document.getElementById('city').focus(); break; } draft.city = v; view = 'ob-method'; render(); break; }
+    case 'city-next': { const v = document.getElementById('city').value.trim(); if (!v) { document.getElementById('city').focus(); break; } if (v !== draft.city) { draft.nsId = null; } draft.city = v; draft.street = draft.street || ''; view = 'ob-method'; render(); break; }
     case 'method': draft.method = t.dataset.v; if (view === 'ob-address') view = 'ob-queue'; render(); break;
-    case 'moe-next': view = 'ob-confirm'; render(); break;
     case 'method-next': view = draft.method === 'address' ? 'ob-address' : 'ob-queue'; render(); break;
-    case 'address-next': draft.street = document.getElementById('street').value.trim(); draft.house = document.getElementById('house').value.trim(); view = 'ob-queue'; render(); break;
+    case 'address-next': draft.street = document.getElementById('street').value.trim(); draft.house = document.getElementById('house').value.trim(); view = draft.autoQueue ? 'ob-confirm' : 'ob-queue'; render(); break;
     case 'queue': draft.queue = t.dataset.v; render(); break;
     case 'queue-next': if (draft.editOf) { const a = S.addresses.find(x => x.id === draft.editOf); a.queue = draft.queue; save(); draft = null; view = 'edit'; toast('Чергу змінено'); } else view = 'ob-confirm'; render(); break;
     case 'dname': draft.name = t.dataset.v; render(); break;
@@ -369,23 +364,28 @@ render().finally(() => {
   setTimeout(() => { pre.classList.add('hide'); setTimeout(() => pre.remove(), 500); }, Math.max(0, 3000 - performance.now()));
 });
 
-// ---------- Миколаївська: каскад «дільниця → нас. пункт → вулиця → будинок» → черга ----------
-async function initMoe() {
-  const $ = id => document.getElementById(id);
-  const fill = (el, items, idKey, nameKey, ph) => { el.innerHTML = `<option value="">${ph}</option>` + items.sort((a, b) => String(a[nameKey]).localeCompare(String(b[nameKey]), 'uk', { numeric: true })).map(x => `<option value="${x[idKey]}">${esc(x[nameKey])}</option>`).join(''); el.disabled = false; };
-  const reset = (...ids) => ids.forEach(id => { const e = $(id); e.innerHTML = '<option value="">—</option>'; e.disabled = true; });
-  const res = $('m-res'), next = $('m-next');
-  const fail = () => { res.innerHTML = `<div class="banner err">${ic('alert')}<div><div class="bt">Сервіс оператора не відповідає</div><div class="bb">Спробуйте ще раз або оберіть чергу вручну.</div></div></div>`; };
-  try { fill($('m-fil'), await moeAddr.filii(), 'idfilial', 'fullname', 'Оберіть дільницю'); reset('m-ns', 'm-st', 'm-dom'); } catch { return fail(); }
-  $('m-fil').onchange = async e => { reset('m-ns', 'm-st', 'm-dom'); res.innerHTML = ''; next.disabled = true; if (!e.target.value) return; try { fill($('m-ns'), await moeAddr.ns(e.target.value), 'idnaspunkt', 'naznaspunkt', 'Оберіть населений пункт'); } catch { fail(); } };
-  $('m-ns').onchange = async e => { reset('m-st', 'm-dom'); res.innerHTML = ''; next.disabled = true; if (!e.target.value) return; draft.city = e.target.selectedOptions[0].text; try { fill($('m-st'), await moeAddr.streets(e.target.value), 'idstreet', 'nazstreet', 'Оберіть вулицю'); } catch { fail(); } };
-  $('m-st').onchange = async e => { reset('m-dom'); res.innerHTML = ''; next.disabled = true; if (!e.target.value) return; draft.street = e.target.selectedOptions[0].text; try { fill($('m-dom'), await moeAddr.houses(e.target.value), 'iddom', 'nazdom', 'Оберіть будинок'); } catch { fail(); } };
-  $('m-dom').onchange = async e => { res.innerHTML = ''; next.disabled = true; if (!e.target.value) return; draft.house = e.target.selectedOptions[0].text;
+// ---------- Підказки адреси ----------
+function initCity() {
+  const r = region(draft.regionId), inp = document.getElementById('city');
+  attachTypeahead(inp, citySource(r), it => { draft.city = it.label; draft.nsId = it.id || null; draft.street = ''; draft.streetId = null; draft.house = ''; view = 'ob-method'; render(); }, { minChars: 0 });
+  if (!draft.city) inp.focus();
+}
+function initAddress() {
+  const r = region(draft.regionId), st = document.getElementById('street'), hs = document.getElementById('house'), res = document.getElementById('addr-res'), next = document.getElementById('addr-next');
+  draft.autoQueue = false;
+  const lookup = async id => {
     res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Шукаємо чергу для адреси…</div></div>`;
-    try { const q = await moeAddr.queue(e.target.value); const g = q.find(x => x.outageType?.name === 'ГПВ') || q[0];
+    try { const q = await (await import('./data.js')).moeAddr.queue(id); const g = q.find(x => x.outageType?.name === 'ГПВ') || q[0];
       if (!g) { res.innerHTML = `<div class="banner warn">${ic('alert')}<div><div class="bt">Чергу не вдалося визначити</div><div class="bb">Оператор не повертає чергу для цієї адреси. Оберіть її вручну.</div></div></div>`; return; }
-      draft.queue = g.outage.name;
+      draft.queue = g.outage.name; draft.autoQueue = true;
       res.innerHTML = `<div class="card" style="background:var(--on-soft);box-shadow:none;gap:8px"><div style="display:flex;gap:10px;align-items:center;font-weight:600;color:var(--on-ink)">${ic('check')}Вашу адресу знайдено</div><div style="display:flex;gap:8px;align-items:baseline"><span class="body-s">Черга</span><span class="mono" style="font-size:20px;font-weight:600">${esc(draft.queue)}</span></div><div class="source ok">${ic('shield')}Визначено за даними Миколаївобленерго</div></div>`;
-      next.disabled = false; next.textContent = 'Продовжити';
-    } catch { fail(); } };
+      next.textContent = 'Продовжити';
+    } catch { res.innerHTML = `<div class="banner err">${ic('alert')}<div><div class="bt">Сервіс оператора не відповідає</div><div class="bb">Оберіть чергу вручну.</div></div></div>`; }
+  };
+  let houseTA = null;
+  const setupHouse = () => { const src = houseSource(r, draft); if (src && !houseTA) houseTA = attachTypeahead(hs, src, it => { draft.house = it.label; lookup(it.id); }, { minChars: 0, emptyText: 'Такого номера немає в довіднику оператора' }); };
+  attachTypeahead(st, streetSource(r, draft), it => { draft.street = it.label; draft.streetId = it.id || null; draft.house = ''; hs.value = ''; res.innerHTML = ''; draft.autoQueue = false; setupHouse(); hs.focus(); }, { minChars: draft.nsId ? 0 : 1 });
+  st.addEventListener('input', () => { draft.streetId = null; draft.autoQueue = false; res.innerHTML = ''; });
+  setupHouse();
+  if (!draft.street) st.focus();
 }

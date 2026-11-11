@@ -68,7 +68,17 @@ async function dtek({ op, name, url }) {
     }
     days[date] = day;
   }
+  const streets = extractJSON(html, 'DisconSchedule.streets');
+  if (streets && Object.keys(streets).length) await saveIfChanged(new URL(`../data/addr/${op}.json`, import.meta.url), streets);
   return { operator: op, name, source: { url, kind: 'official' }, publishedAt: fact.update || null, days };
+}
+async function saveIfChanged(file, obj) {
+  const txt = JSON.stringify(obj);
+  let prev = null; try { prev = await readFile(file, 'utf8'); } catch {}
+  if (prev === txt) return;
+  await mkdir(new URL('.', file), { recursive: true });
+  await writeFile(file, txt);
+  console.log(`  довідник адрес оновлено: ${file.pathname.split('/').pop()}`);
 }
 
 // ---------- Хмельницькобленерго: текстові повідомлення ----------

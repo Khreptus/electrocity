@@ -261,3 +261,10 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 @media (min-width:1024px){.stage,.sheet{padding-left:max(20px,calc((100% - 760px)/2));padding-right:max(20px,calc((100% - 760px)/2))}}
 .field.sel select{flex:1;border:0;background:none;font:inherit;font-size:16px;color:var(--text);outline:none;min-width:0;-webkit-appearance:none;appearance:none}
 .field.sel select:disabled{color:var(--text-3)}
+.sugg{background:var(--surface);border-radius:16px;box-shadow:var(--shadow-float);margin-top:-6px;max-height:300px;overflow:auto;display:flex;flex-direction:column;position:relative;z-index:5}
+.sugg button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 16px;text-align:left;font-size:16px;width:100%}
+.sugg button+button{border-top:1px solid var(--border)}
+.sugg button.on,.sugg button:hover{background:var(--surface-2)}
+.sugg b{font-weight:700}
+.sugg small{font-size:12px;font-weight:500;color:var(--text-2)}
+.sugg .none{padding:14px 16px;font-size:14px;color:var(--text-2)}
