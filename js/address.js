@@ -6,13 +6,19 @@ import { API, API_READY } from './config.js';
 
 const norm = s => String(s || '').toLowerCase().replace(/[’'ʼ`]/g, '’').replace(/ё/g, 'е').trim();
 // прибираємо «вул.», «м.», «с.» тощо, щоб «шев» знаходило «вул. Шевченка»
-const core = s => norm(s).replace(/^(м|с|смт|с-ще|селище|сел|вул|пров|просп|пр|пл|бул|туп|узвіз|шосе|наб|мкр|проїзд|в’їзд|майдан|дорога)\.?\s+/i, '');
+const core = s => norm(s).replace(/^(м|с|смт|с-ще|селище|сел|вул|пров|просп|пр|пл|бул|туп|узвіз|шосе|наб|мкр|проїзд|в’їзд|майдан|дорога|ул|улица|пер|переулок|проспект|пр-т|бульвар|площадь|г|город|пгт|пос|поселок|посёлок|село|деревня)\.?\s+/i, '');
+// «Скелет» слова для пошуку російською: голосні → *, без ь/ъ/апострофів, подвоєні літери — одна.
+// «Хмельницкий» ≈ «Хмельницький», «Кривой Рог» ≈ «Кривий Ріг», «Одесса» ≈ «Одеса», «Киев» ≈ «Київ».
+export const skel = s => norm(s).replace(/[’ʼ`ъь]/g, '').replace(/ґ/g, 'г').replace(/[аеєёэиіїйоуыюя]+/g, '*').replace(/(.)\1+/g, '$1');
+const ruAlias = q => q.replace(/^никола/, 'микола');
 export function rank(items, q, key = x => x.label) {
   const nq = norm(q); if (!nq) return items.slice(0, 30);
+  const sq = skel(ruAlias(core(nq))); const useSk = sq.replace(/\*/g, '').length >= 2;
   const out = [];
   for (const it of items) {
     const l = norm(key(it)), c = core(key(it));
-    const i = c.startsWith(nq) ? 0 : l.startsWith(nq) ? 1 : c.split(/[\s-]/).some(w => w.startsWith(nq)) ? 2 : l.includes(nq) ? 3 : -1;
+    let i = c.startsWith(nq) ? 0 : l.startsWith(nq) ? 1 : c.split(/[\s-]/).some(w => w.startsWith(nq)) ? 2 : l.includes(nq) ? 3 : -1;
+    if (i < 0 && useSk) { const sc = skel(c); i = sc.startsWith(sq) ? 4 : sc.split(/[\s-]/).some(w => w.startsWith(sq)) ? 5 : -1; }
     if (i >= 0) out.push([i, it]);
   }
   return out.sort((a, b) => a[0] - b[0] || key(a[1]).localeCompare(key(b[1]), 'uk')).slice(0, 30).map(x => x[1]);

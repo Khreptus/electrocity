@@ -1,5 +1,5 @@
 import { ic, STATE_ICON } from './icons.js';
-import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue } from './address.js';
+import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, skel } from './address.js';
 import { API, API_READY } from './config.js';
 import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr } from './data.js';
 
@@ -231,7 +231,11 @@ function regionMatch(x, q) {
   const hay = rnorm([x.name, x.opName, x.center, ...(x.cities || [])].join(' '));
   if (hay.includes(q)) return true;
   const stem = q.length >= 5 ? q.slice(0, -2) : null; // відкидаємо закінчення
-  return !!stem && hay.split(' ').some(w => w.startsWith(stem));
+  if (stem && hay.split(' ').some(w => w.startsWith(stem))) return true;
+  // російською: «Николаев», «Кривой Рог», «Хмельницкий»
+  const sq = skel(q.replace(/^никола/, 'микола')); if (sq.replace(/\*/g, '').length < 2) return false;
+  const sStem = q.length >= 5 ? skel(q.replace(/^никола/, 'микола').slice(0, -2)) : sq;
+  return hay.split(' ').some(w => { const sw = skel(w); return sw.startsWith(sq) || sw.startsWith(sStem); });
 }
 function manualReason(r) {
   if (r.op === 'hoe') return 'Черга визначається за офіційними списками адрес Хмельницькобленерго — оберіть населений пункт, вулицю й будинок зі списку підказок. Якщо адреси там немає, перевірте чергу на hoe.com.ua → «Перевірити чергу» і оберіть її тут.';
