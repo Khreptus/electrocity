@@ -1,11 +1,8 @@
 name: Графіки відключень
 
 on:
-  schedule:
-    - cron: '*/10 * * * *'
+  # Графіки тепер збирає Cloudflare Worker (cron щохвилини). Лише ручний запуск.
   workflow_dispatch:
-  push:
-    paths: ['scripts/**', '.github/workflows/schedules.yml']
 
 permissions:
   contents: write
