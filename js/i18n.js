@@ -120,6 +120,33 @@ const T = [
   ['Чергу змінено', 'Queue changed', 'Gruppe geändert'], ['Адресу видалено', 'Address deleted', 'Adresse gelöscht'], ['Графіки оновлено', 'Schedules refreshed', 'Pläne aktualisiert'],
   ['1 год', '1 h', '1 Std.'], ['Змінити', 'Edit', 'Bearbeiten'], ['Назад', 'Back', 'Zurück'], ['Обрати', 'Choose', 'Wählen'],
   ['Завантаження', 'Loading', 'Laden'], ['Скопіювати', 'Copy', 'Kopieren'], ['Скопійовано', 'Copied', 'Kopiert'],
+  // сторінка встановлення
+  ['Встановити Electrocity — графік відключень', 'Install Electrocity — outage schedule', 'Electrocity installieren — Abschaltplan'],
+  ['. Графік відключень для вашої адреси — з офіційних джерел.', '. Outage schedule for your address — from official sources.', '. Abschaltplan für Ihre Adresse — aus offiziellen Quellen.'],
+  ['Безкоштовно', 'Free', 'Kostenlos'], ['Без реєстрації', 'No sign-up', 'Ohne Registrierung'], ['Встановити', 'Install', 'Installieren'],
+  ['Застосунок встановлено', 'App installed', 'App installiert'], ['Відкрити в браузері', 'Open in browser', 'Im Browser öffnen'], ['Як встановити', 'How to install', 'So installieren Sie'],
+  ['Відкрийте цю сторінку в', 'Open this page in', 'Öffnen Sie diese Seite in'], ['Натисніть', 'Tap', 'Tippen Sie auf'], ['на панелі внизу', 'in the bottom bar', 'in der unteren Leiste'],
+  ['Прокрутіть і оберіть', 'Scroll and choose', 'Scrollen und wählen Sie'], ['На початковий екран', 'Add to Home Screen', 'Zum Home-Bildschirm'], ['Додати', 'Add', 'Hinzufügen'],
+  ['— іконка з’явиться на екрані «Додому»', '— the icon appears on your Home Screen', '— das Symbol erscheint auf dem Home-Bildschirm'],
+  ['Відкрийте сторінку в', 'Open the page in', 'Öffnen Sie die Seite in'], ['і натисніть', 'and tap', 'und tippen Sie auf'], ['вище', 'above', 'oben'],
+  ['Якщо кнопка не спрацювала: меню', 'If the button did not work: menu', 'Falls die Schaltfläche nicht funktioniert: Menü'], ['Встановити застосунок', 'Install app', 'App installieren'],
+  ['або', 'or', 'oder'], ['Додати на головний екран', 'Add to Home screen', 'Zum Startbildschirm hinzufügen'],
+  ['Підтвердьте — іконка з’явиться на робочому столі', 'Confirm — the icon appears on your home screen', 'Bestätigen — das Symbol erscheint auf dem Startbildschirm'],
+  ['(macOS Sonoma і новіші): меню', '(macOS Sonoma and newer): menu', '(macOS Sonoma und neuer): Menü'], ['Файл', 'File', 'Ablage'], ['Додати в Dock', 'Add to Dock', 'Zum Dock hinzufügen'],
+  [': натисніть', ': click', ': klicken Sie auf'], ['вище або значок установки в адресному рядку', 'above or the install icon in the address bar', 'oben oder das Installationssymbol in der Adressleiste'],
+  ['Electrocity відкриватиметься окремим вікном, як звичайна програма', 'Electrocity opens in its own window, like a regular app', 'Electrocity öffnet sich in einem eigenen Fenster wie eine normale App'],
+  ['Чому не одним натисканням?', 'Why not one tap?', 'Warum nicht mit einem Tipp?'],
+  ['Apple не дозволяє сайтам самостійно додавати іконку на iPhone — потрібні два дотики в меню «Поділитися». Після встановлення працюють і сповіщення (iOS 16.4+).', 'Apple does not let websites add an icon to the iPhone themselves — it takes two taps in the “Share” menu. Once installed, notifications work too (iOS 16.4+).', 'Apple erlaubt Websites nicht, selbst ein Symbol auf dem iPhone anzulegen — es braucht zwei Tipps im Menü „Teilen“. Nach der Installation funktionieren auch Benachrichtigungen (iOS 16.4+).'],
+  ['Статус і таймер до відключення', 'Status and countdown to outage', 'Status und Countdown bis zur Abschaltung'], ['Підказки адреси та черга', 'Address suggestions and queue', 'Adressvorschläge und Gruppe'],
+  ['Кілька адрес: дім, робота', 'Several addresses: home, work', 'Mehrere Adressen: Zuhause, Arbeit'], ['Без акаунта, дані на пристрої', 'No account, data stays on device', 'Kein Konto, Daten bleiben auf dem Gerät'],
+  ['Статус — за опублікованими графіками операторів, а не фактична наявність світла.', 'Status follows the operators’ published schedules, not the actual presence of power.', 'Der Status folgt den veröffentlichten Plänen der Betreiber, nicht der tatsächlichen Stromversorgung.'],
+  ['Платформа', 'Platform', 'Plattform'], ['Відкрити Electrocity', 'Open Electrocity', 'Electrocity öffnen'],
+  ['Electrocity вже встановлено на цьому пристрої', 'Electrocity is already installed on this device', 'Electrocity ist auf diesem Gerät bereits installiert'],
+  ['Готово! Іконка Electrocity — на робочому столі', 'Done! The Electrocity icon is on your home screen', 'Fertig! Das Electrocity-Symbol ist auf dem Startbildschirm'],
+  ['Натисніть «Поділитися» → «На початковий екран»', 'Tap “Share” → “Add to Home Screen”', 'Tippen Sie auf „Teilen“ → „Zum Home-Bildschirm“'],
+  ['Меню «Файл» → «Додати в Dock»', 'Menu “File” → “Add to Dock”', 'Menü „Ablage“ → „Zum Dock hinzufügen“'],
+  ['Меню браузера → «Встановити застосунок»', 'Browser menu → “Install app”', 'Browsermenü → „App installieren“'],
+  ['внизу → «На початковий екран»', 'at the bottom → “Add to Home Screen”', 'unten → „Zum Home-Bildschirm“'],
   // регіони
   ['м. Київ', 'Kyiv city', 'Stadt Kyjiw'], ['Київська', 'Kyiv Oblast', 'Oblast Kyjiw'], ['Вінницька', 'Vinnytsia Oblast', 'Oblast Winnyzja'],
   ['Волинська', 'Volyn Oblast', 'Oblast Wolyn'], ['Дніпропетровська', 'Dnipropetrovsk Oblast', 'Oblast Dnipropetrowsk'], ['Донецька', 'Donetsk Oblast', 'Oblast Donezk'],
@@ -142,7 +169,8 @@ const T = [
   ['Хмельницькобленерго', 'Khmelnytskoblenergo', 'Khmelnytskoblenergo'], ['Черкасиобленерго', 'Cherkasyoblenergo', 'Cherkasyoblenergo'], ['Чернівціобленерго', 'Chernivtsioblenergo', 'Chernivtsioblenergo'],
   ['Чернігівобленерго', 'Chernihivoblenergo', 'Chernihivoblenergo'],
   ['графік в один клік.', 'schedule in one click.', 'Plan mit einem Klick.'],
-  ['Миттєво', 'Instantly', 'Sofort'], ['Українська', 'Українська', 'Українська'], ['English', 'English', 'English'], ['Deutsch', 'Deutsch', 'Deutsch'],
+  ['Миттєво', 'Instantly', 'Sofort'], ['зараз', 'now', 'jetzt'], ['Відключення о', 'Outage at', 'Abschaltung um'], ['Відновлення о', 'Power returns at', 'Strom zurück um'],
+  ['Графік на добу', 'Schedule for the day', 'Tagesplan'], ['Черга', 'Queue', 'Gruppe'], ['Українська', 'Українська', 'Українська'], ['English', 'English', 'English'], ['Deutsch', 'Deutsch', 'Deutsch'],
 ];
 const DICT = { en: new Map(), de: new Map() };
 for (const [uk, en, de] of T) { DICT.en.set(uk, en); DICT.de.set(uk, de); }
@@ -152,6 +180,9 @@ const D = s => s.replace(/(\d+) год/g, (_, n) => n + dur[lang][0]).replace(/(
 const op = name => DICT[lang].get(name) || name;
 // [регулярний вираз, en(…групи), de(…групи)]
 const P = [
+  [/^Обрати (.+)$/, q => `Choose ${q}`, q => `${q} wählen`],
+  [/^(Світло є|Відключення|Можливе|Невідомо|Аварія|Можливе відключення) (\d.*)$/, (a, b) => `${tr(a)} ${b}`, (a, b) => `${tr(a)} ${b}`],
+  [/^Для всіх ваших адрес \((\d+)\)$/, n => `For all your addresses (${n})`, n => `Für alle Ihre Adressen (${n})`],
   [/^Черга (\S+)$/, q => `Queue ${q}`, q => `Gruppe ${q}`],
   [/^Черги (.+)$/, o => `Queues of ${op(o)}`, o => `Gruppen von ${op(o)}`],
   [/^Крок (\d) з (\d)$/, (a, b) => `Step ${a} of ${b}`, (a, b) => `Schritt ${a} von ${b}`],
@@ -189,6 +220,7 @@ export function tr(s) {
   const d = DICT[lang].get(core); if (d != null) return m[1] + d + m[3];
   for (const [re, en, de] of P) { const g = core.match(re); if (g) return m[1] + (lang === 'en' ? en : de)(...g.slice(1)) + m[3]; }
   if (core.includes(' · ')) { const parts = core.split(' · '); const t = parts.map(tr); if (t.some((x, i) => x !== parts[i])) return m[1] + t.join(' · ') + m[3]; }
+  if (core.includes(', ')) { const parts = core.split(', '); const t = parts.map(tr); if (t.some((x, i) => x !== parts[i])) return m[1] + t.join(', ') + m[3]; }
   if (/\d+ (год|хв)/.test(core)) return m[1] + D(core) + m[3];
   return s;
 }

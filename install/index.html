@@ -161,5 +161,6 @@ $('installBtn').onclick = async () => {
 // Реєструємо service worker застосунку — потрібен, щоб Chrome запропонував установку
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(() => {});
 </script>
+<script type="module">import { setLang, detectLang } from '../js/i18n.js'; let l; try { l = JSON.parse(localStorage.getItem('svitlo.v1') || '{}').lang; } catch {} setLang(new URLSearchParams(location.search).get('lang') || l || detectLang());</script>
 </body>
 </html>
