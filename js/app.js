@@ -83,6 +83,18 @@ async function addrStatus(a) {
   const scopeTxt = it => it.scope === 'house' ? 'ваш будинок' : it.scope === 'street' ? 'уся вулиця' : 'увесь населений пункт';
   const checked = j.checkedAt ? new Date(j.checkedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
   const src = `<div class="cap" style="margin-top:6px">${esc(j.source)} · перевірено о ${checked} · <a href="${j.url}" target="_blank" rel="noopener">джерело</a></div>`;
+  // Активна аварія за адресою важливіша за графік — показуємо її у верхньому статусі
+  const em = active.find(it => it.kind === 'emergency') || active[0];
+  const stg = document.querySelector('.stage'), hero = stg?.querySelector('.hero');
+  if (em && hero) {
+    const isEm = em.kind === 'emergency';
+    stg.dataset.state = 'emergency'; hero.className = 'hero st-emergency';
+    hero.querySelector('.src').innerHTML = `<span class="badge" style="background:var(--emergency)">${ic('alert')}</span>За даними оператора для вашої адреси`;
+    hero.querySelector('h1').textContent = isEm ? 'Аварійне відключення' : 'Планові роботи';
+    const sub = hero.querySelector('.sub'); if (sub) sub.textContent = `${whenTxt(em)} · ${scopeTxt(em)}`;
+    const tm = hero.querySelector('.timer, .note');
+    if (tm) tm.outerHTML = `<div class="note">${ic('clock')}${em.end ? `Орієнтовне відновлення о ${isoHM(em.end)}${em.end.slice(0, 10) !== date ? ' (' + isoDM(em.end) + ')' : ''}` : 'Час відновлення невідомий'}</div>`;
+  }
   if (!items.length) { box.innerHTML = `<div class="addr-ok">${ic('shield')}<span>За вашою адресою аварій і планових робіт не зареєстровано</span><span class="cap">· ${checked}</span></div>`; return; }
   box.innerHTML = items.slice(0, 3).map(it => {
     const now = active.includes(it); const em = it.kind === 'emergency';

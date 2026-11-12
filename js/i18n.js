@@ -187,6 +187,7 @@ const D = s => s.replace(/(\d+) год/g, (_, n) => n + dur[lang][0]).replace(/(
 const op = name => DICT[lang].get(name) || name;
 // [регулярний вираз, en(…групи), de(…групи)]
 const P = [
+  [/^Орієнтовне відновлення о (\S+)(.*)$/, (t, r) => `Expected back at ${t}${r}`, (t, r) => `Voraussichtlich zurück um ${t}${r}`],
   [/^· перевірено о (.+)$/, t => `· checked at ${t}`, t => `· geprüft um ${t}`],
   [/^(.+) · перевірено о (\S+) ·$/, (o, t) => `${op(o)} · checked at ${t} ·`, (o, t) => `${op(o)} · geprüft um ${t} ·`],
   [/^орієнтовно до (.+)$/, t => `until about ${t}`, t => `voraussichtlich bis ${t}`],
