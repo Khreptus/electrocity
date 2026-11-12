@@ -143,7 +143,7 @@ function stage(a, h, loading) {
     body = `<div class="hero st-${h.state}"><div class="src"><span class="badge" style="background:${badgeBg}">${ic(STATE_ICON[h.state] || 'help')}</span>За опублікованим графіком</div><h1>${h.title}</h1><div class="sub">${esc(h.sub)}</div>${timer}</div>`;
   }
   return `<section class="stage" data-state="${lampState}"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt="">
-   <button class="loc" data-act="switcher"><span class="tile">${ic(NAMES.find(n => n[1] === a.name)?.[0] || 'home')}</span><span class="txt"><span class="name">${esc(a.name)} ${ic('chevron-down')}</span><span class="addr">${esc(addrLine(a) || region(a.regionId)?.name)}</span></span><span class="tile round" data-act="notif" role="button" aria-label="Сповіщення">${ic('bell')}</span></button>
+   <button class="loc" data-act="switcher"><span class="tile">${ic(NAMES.find(n => n[1] === a.name)?.[0] || 'home')}</span><span class="txt"><span class="name">${esc(a.name)} ${ic('chevron-down')}</span><span class="addr">${esc(a.street ? `${a.street}${a.house ? ', ' + a.house : ''}` : (a.city || region(a.regionId)?.name))}</span></span><span class="tile round" data-act="notif" role="button" aria-label="Сповіщення">${ic('bell')}</span></button>
    <div class="lamp-space"></div>${body}</section>`;
 }
 

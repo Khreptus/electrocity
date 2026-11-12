@@ -1,5 +1,5 @@
 // Service worker: оболонка — cache-first, графіки — network-first з резервом у кеші.
-const VERSION = 'v0.12.4';
+const VERSION = 'v0.12.5';
 const SHELL = `shell-${VERSION}`;
 const DATA = 'data-v1';
 const FILES = [
