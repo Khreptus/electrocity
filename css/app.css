@@ -71,16 +71,19 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .loc .name{font-size:17px;font-weight:600;display:flex;align-items:center;gap:4px}
 .loc .addr{font-size:12px;font-weight:500;color:var(--stage-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lamp-space{height:176px}
-.hero .src{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500}
+/* Hero (Figma «Stage — новий стиль»): статус і черга по центру, джерело під ними, далі таймер */
+.hero{display:flex;flex-direction:column}
+.hero .src{order:2;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:16px;font-size:9.25px;line-height:12px;font-weight:500}
+.hero .src .badge{width:20px;height:20px}.hero .src .badge svg.i{width:11px;height:11px}
 .badge{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:var(--stage-text)}
 .badge svg.i{width:14px;height:14px;stroke-width:2.2}
-.hero h1{font-size:32px;line-height:38px;font-weight:700;letter-spacing:-.015em;margin-top:16px}
-.hero .sub{font-size:14px;line-height:20px;margin-top:4px}
-.hero .timer{display:flex;justify-content:space-between;align-items:flex-end;margin-top:16px}
+.hero h1{order:0;font-size:38px;line-height:38px;font-weight:700;letter-spacing:-1.5px;margin-top:0;text-align:center}
+.hero .sub{order:1;font-size:14px;line-height:20px;margin-top:4px;text-align:center}
+.hero .timer{order:3;display:flex;justify-content:space-between;align-items:flex-end;margin-top:16px}
 .hero .lbl{font-size:12px;font-weight:500;color:var(--stage-text-3)}
-.hero .big{font-family:var(--mono);font-weight:600;font-size:37px;line-height:48px;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
-.hero .nx{font-family:var(--mono);font-weight:600;font-size:20px;line-height:24px;text-align:right}
-.hero .note{display:flex;gap:8px;align-items:center;background:var(--stage-tile);border-radius:14px;padding:10px 12px;margin-top:16px;font-size:14px;font-weight:500;color:var(--stage-text-2)}
+.hero .big{font-family:var(--mono);font-weight:600;font-size:37px;line-height:48px;letter-spacing:-3px;font-variant-numeric:tabular-nums}
+.hero .nx{font-family:var(--mono);font-weight:600;font-size:20px;line-height:24px;letter-spacing:-1px;text-align:right}
+.hero .note{order:3;display:flex;gap:8px;align-items:center;background:var(--stage-tile);border-radius:14px;padding:10px 12px;margin-top:16px;font-size:14px;font-weight:500;color:var(--stage-text-2)}
 .st-on h1{color:var(--light)} .st-on .sub{color:var(--stage-text)}
 .st-off h1{color:var(--stage-dim)} .st-off .sub{color:var(--stage-text-3)}
 .st-emergency h1{color:var(--stage-alert)} .st-unknown h1,.st-possible h1{color:var(--stage-dim)}
