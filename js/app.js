@@ -99,7 +99,7 @@ async function addrStatus(a) {
   box.innerHTML = items.slice(0, 3).map(it => {
     const now = active.includes(it); const em = it.kind === 'emergency';
     const title = em ? (now ? 'Аварійне відключення за вашою адресою' : 'Аварійне відключення') : (now ? 'Планові роботи зараз' : 'Планові роботи за вашою адресою');
-    return `<div class="banner ${em ? 'err' : 'warn'}">${ic('alert')}<div><div class="bt">${title}</div><div class="bb">${esc(whenTxt(it))} · ${scopeTxt(it)}${it.reason ? `<br>${esc(it.reason)}` : ''}</div>${src}</div></div>`;
+    return `<div class="banner ${em ? 'err' : 'warn'}">${ic('alert')}<div><div class="bt">${title}</div><div class="bb">${esc(whenTxt(it))} · ${scopeTxt(it)}${it.reason && !/^(Планові|Аварійні)$/i.test(it.reason.trim()) ? `<br>${esc(it.reason)}` : ''}</div>${src}</div></div>`;
   }).join('');
 }
 
