@@ -57,8 +57,10 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .stage .lamp.on{opacity:0;transition:opacity .6s ease}
 .stage[data-state=on] .lamp.on{opacity:1}
 /* світло вниз від лампи (Figma: Stage / Lamp · State=On · «Rectangle 3») */
-.stage .beam{position:absolute;left:50%;top:223px;width:282px;height:77px;margin-left:-141px;filter:blur(40px);opacity:0;transition:opacity .6s ease;pointer-events:none}
-.stage .beam i{position:absolute;inset:0;background:rgba(255,212,139,.22);clip-path:polygon(15.7% 0,81.5% 0,100% 100%,0 100%)}
+.stage .beam{position:absolute;left:50%;top:228px;width:282px;height:77px;margin-left:-141px;opacity:0;transition:opacity .6s ease;pointer-events:none;z-index:0}
+.stage .beam i,.stage .beam b{position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 282 77' preserveAspectRatio='none'%3E%3Cpath d='M44.2 0C44.2 0 40.5 11.5 137.5 11.5C229.9 11.5 229.9 0 229.9 0L282 77H0Z' fill='%23FFD58B' fill-opacity='.22'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat}
+.stage .beam i{filter:blur(1.5px);-webkit-mask:linear-gradient(#000 0%,#000 25%,transparent 100%);mask:linear-gradient(#000 0%,#000 25%,transparent 100%)}
+.stage .beam b{inset:-20px -60px -90px;padding:20px 60px 90px;background-origin:content-box;background-size:100% 100%;filter:blur(26px);-webkit-mask:linear-gradient(transparent 0%,#000 30%,#000 55%,transparent 100%);mask:linear-gradient(transparent 0%,#000 30%,#000 55%,transparent 100%)}
 .stage[data-state=on] .beam{opacity:1}
 .stage[data-state=on]{--glow:var(--glow-on)}
 .stage[data-state=emergency]{--glow:var(--glow-emergency)}
