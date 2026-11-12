@@ -142,7 +142,7 @@ function stage(a, h, loading) {
       : `<div class="note">${ic('clock')}${h.note || 'Час наступної зміни невідомий'}</div>`;
     body = `<div class="hero st-${h.state}"><div class="src"><span class="badge" style="background:${badgeBg}">${ic(STATE_ICON[h.state] || 'help')}</span>За опублікованим графіком</div><h1>${h.title}</h1><div class="sub">${esc(h.sub)}</div>${timer}</div>`;
   }
-  return `<section class="stage" data-state="${lampState}"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt=""><div class="beam" aria-hidden="true"><i></i><b></b></div>
+  return `<section class="stage" data-state="${lampState}"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt=""><div class="beam" aria-hidden="true"><i></i></div>
    <button class="loc" data-act="switcher"><span class="tile">${ic(NAMES.find(n => n[1] === a.name)?.[0] || 'home')}</span><span class="txt"><span class="name">${esc(a.name)} ${ic('chevron-down')}</span><span class="addr">${esc(a.street ? `${a.street}${a.house ? ', ' + a.house : ''}` : (a.city || region(a.regionId)?.name))}</span></span><span class="tile round" data-act="notif" role="button" aria-label="Сповіщення">${ic('bell')}</span></button>
    <div class="lamp-space"></div>${body}</section>`;
 }
@@ -267,7 +267,7 @@ function band(title, back, backTo = 'home') {
 // ----- Онбординг -----
 function welcome() {
   const sample = [[0, 180, 'on'], [180, 390, 'off'], [390, 600, 'on'], [600, 810, 'off'], [810, 1140, 'on'], [1140, 1350, 'off'], [1350, 1410, 'possible'], [1410, 1440, 'on']];
-  return `<section class="stage" data-state="on" style="padding-bottom:80px"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt=""><div class="beam" aria-hidden="true"><i></i><b></b></div>
+  return `<section class="stage" data-state="on" style="padding-bottom:80px"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt=""><div class="beam" aria-hidden="true"><i></i></div>
    <div style="height:230px"></div><h1 style="font-size:28px;line-height:34px;font-weight:600;letter-spacing:-.01em">Знайте, коли буде <span style="color:var(--light)">світло</span></h1>
    <p style="color:var(--stage-text-2);margin-top:12px;font-size:16px;line-height:22px">Графік відключень для вашої адреси по всій Україні. Дані — з офіційних джерел операторів.</p></section>
    <section class="sheet" style="gap:24px;padding-top:24px">
