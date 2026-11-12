@@ -56,6 +56,10 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .stage .lamp{position:absolute;left:50%;top:0;width:194px;margin-left:-97px;height:auto;pointer-events:none;user-select:none}
 .stage .lamp.on{opacity:0;transition:opacity .6s ease}
 .stage[data-state=on] .lamp.on{opacity:1}
+/* світло вниз від лампи (Figma: Stage / Lamp · State=On · «Rectangle 3») */
+.stage .beam{position:absolute;left:50%;top:223px;width:282px;height:77px;margin-left:-141px;filter:blur(40px);opacity:0;transition:opacity .6s ease;pointer-events:none}
+.stage .beam i{position:absolute;inset:0;background:rgba(255,212,139,.22);clip-path:polygon(15.7% 0,81.5% 0,100% 100%,0 100%)}
+.stage[data-state=on] .beam{opacity:1}
 .stage[data-state=on]{--glow:var(--glow-on)}
 .stage[data-state=emergency]{--glow:var(--glow-emergency)}
 .stage[data-state=unknown],.stage[data-state=possible],.stage[data-state=loading]{--glow:var(--glow-unknown)}
