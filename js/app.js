@@ -51,7 +51,7 @@ async function render() {
   $app.innerHTML = side + `<div class="desk-wrap"><main class="view ${tabs ? '' : 'no-tabs'}">${html}</main></div>` + (tabs ? tabbar() : '');
   if (view === 'ob-city') initCity();
   if (view === 'ob-address') initAddress();
-  if (view === 'home' && cur()) addrStatus(cur());
+  if ((view === 'home' || view === 'detail') && cur()) addrStatus(cur());
   document.title = view === 'home' && cur() ? `${cur().name} · Electrocity` : 'Electrocity — графік відключень';
 }
 
@@ -96,7 +96,7 @@ async function addrStatus(a) {
     if (tm) tm.outerHTML = `<div class="note">${ic('clock')}${em.end ? `Орієнтовне відновлення о ${isoHM(em.end)}${em.end.slice(0, 10) !== date ? ' (' + isoDM(em.end) + ')' : ''}` : 'Час відновлення невідомий'}</div>`;
   }
   if (!items.length) { box.innerHTML = `<div class="addr-ok">${ic('shield')}<span>За вашою адресою аварій і планових робіт не зареєстровано<span class="t"> | ${checked}</span></span></div>`; return; }
-  box.innerHTML = items.slice(0, 3).map(it => {
+  box.innerHTML = items.slice(0, view === 'detail' ? 20 : 3).map(it => {
     const now = active.includes(it); const em = it.kind === 'emergency';
     const title = em ? (now ? 'Аварійне відключення за вашою адресою' : 'Аварійне відключення') : (now ? 'Планові роботи зараз' : 'Планові роботи за вашою адресою');
     return `<div class="banner ${em ? 'err' : 'warn'}">${ic('alert')}<div><div class="bt">${title}</div><div class="bb">${esc(whenTxt(it))} · ${scopeTxt(it)}${it.reason && !/^(Планові|Аварійні)$/i.test(it.reason.trim()) ? `<br>${esc(it.reason)}` : ''}</div>${src}</div></div>`;
@@ -210,7 +210,7 @@ async function detail() {
   const tile = (l, v, c) => `<div class="card" style="flex:1;gap:2px;padding:12px;border-radius:16px"><span class="cap">${l}</span><span class="h-s" style="color:var(--${c}-ink)">${v}</span></div>`;
   return `${band(`Графік · Черга ${esc(a.queue)}`, true)}<section class="sheet r32">
    <div class="seg"><button data-day="0" aria-pressed="${isToday}">Сьогодні</button><button data-day="1" aria-pressed="${!isToday}">Завтра</button></div>
-   ${segs ? `<div class="card">${scaleHTML(segs, isToday ? min : null)}</div><div style="display:flex;gap:8px">${tile('Зі світлом', dur(sum(['on'])), 'on')}${tile('Без світла', dur(sum(['off', 'emergency'])), 'off')}${tile('Можливо', dur(sum(['possible'])), 'possible')}</div>
+   <div id="addr-status"></div>${segs ? `<div class="card">${scaleHTML(segs, isToday ? min : null)}</div><div style="display:flex;gap:8px">${tile('Зі світлом', dur(sum(['on'])), 'on')}${tile('Без світла', dur(sum(['off', 'emergency'])), 'off')}${tile('Можливо', dur(sum(['possible'])), 'possible')}</div>
    <div class="card" style="gap:0;padding:4px 16px">${segs.map(s => evRow(s, min, isToday)).join('')}</div>` : `<div class="empty-day">${ic('calendar')}<div>Графік ще не опубліковано</div></div>`}
    <div class="card" style="gap:10px">${sourceLine(data, a)}<div class="cap">Графік може змінюватися протягом дня. Статус — за опублікованим графіком, а не фактична наявність світла.</div></div></section>`;
 }
