@@ -5,6 +5,7 @@
 // • усе інше — статичні файли застосунку (ASSETS)
 import { parseDtek, parseHoe, parseMoe, SOURCES } from './sources.js';
 import { sendPush, vapidKeys } from './push.js';
+import { hoeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME } from './outages.js';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 const json = (d, s = 200, h = {}) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, ...h } });
@@ -44,6 +45,7 @@ export default {
         const r = await sendPush(env, s.sub, localize({ title: 'Electrocity', body: 'Сповіщення працюють ✓', tag: 'test' }, s.lang));
         return json({ ok: r.ok, status: r.status });
       }
+      if (p === '/api/outage') { const n = kyiv(); return json(await addressStatus(env, url.searchParams, ctx, `${n.date}T${String(Math.floor(n.min / 60)).padStart(2, '0')}:${String(n.min % 60).padStart(2, '0')}`), 200, { 'Cache-Control': 'public, max-age=120' }); }
       if (p === '/api/dtek/houses') return json(await dtekHouses(url.searchParams, ctx), 200, { 'Cache-Control': 'public, max-age=3600' });
       if (p === '/api/stats/install' && req.method === 'POST') {
         const { platform } = await req.json().catch(() => ({}));
@@ -104,7 +106,7 @@ async function tick(env, manual = false) {
   const subs = await getSubs(env);
   const ids = Object.keys(subs);
   if (!ids.length) return status;
-  const outbox = [];
+  const outbox = []; let seenChanged = false;
   for (const id of ids) {
     const s = subs[id];
     for (const a of s.addrs || []) {
@@ -113,6 +115,18 @@ async function tick(env, manual = false) {
         outbox.push({ id, msg: { title: `${a.name} · ${c.title}`, body: c.body, tag: `${c.kind}-${a.op}-${a.queue}-${c.date}` } });
       const r = reminder(data[a.op], a, s.lead ?? 30, now, t);
       if (r) outbox.push({ id, msg: r });
+      // аварія / планові роботи саме за адресою
+      if (t.address !== false && a.street && a.house) {
+        const items = await addrItems(env, a, now).catch(() => []);
+        for (const it of items) {
+          if (it.kind === 'schedule') continue;
+          const key = `${a.op}|${a.city}|${a.street}|${a.house}|${it.kind}|${it.start}|${it.end}`;
+          s.seen ||= [];
+          if (s.seen.includes(key)) continue;
+          s.seen.push(key); s.seen = s.seen.slice(-40); seenChanged = true;
+          outbox.push({ id, msg: addrMsg(a, it) });
+        }
+      }
     }
   }
   let dead = false;
@@ -120,7 +134,22 @@ async function tick(env, manual = false) {
     const r = await sendPush(env, subs[o.id].sub, localize(o.msg, subs[o.id].lang)).catch(() => ({ status: 0 }));
     if (r.status === 404 || r.status === 410) { delete subs[o.id]; dead = true; }
   }));
-  if (dead) await env.KV.put('subs', JSON.stringify(subs));
+  if (dead || seenChanged) await env.KV.put('subs', JSON.stringify(subs));
+}
+
+const hhmm = iso => iso ? iso.slice(11, 16) : '…';
+const dm = iso => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) : '';
+async function addrItems(env, a, now) {
+  const nowIso = `${now.date}T${String(Math.floor(now.min / 60)).padStart(2, '0')}:${String(now.min % 60).padStart(2, '0')}`;
+  if (a.op === 'hoe') return (await hoeAddress(env, a, nowIso)).items;
+  if (DTEK_NAME[a.op] && a.op !== 'dtek-dnem') return dtekHouseStatus(await dtekStreet(a.op, a.city, a.street), a.op, a.house).items;
+  return [];
+}
+function addrMsg(a, it) {
+  const when = it.start && it.end && it.start.slice(0, 10) === it.end.slice(0, 10) ? `${dm(it.start)} ${hhmm(it.start)}–${hhmm(it.end)}` : `${dm(it.start)} ${hhmm(it.start)} – ${dm(it.end)} ${hhmm(it.end)}`;
+  return it.kind === 'emergency'
+    ? { title: `⚠ ${a.name} · аварійне відключення`, body: `За адресою ${a.street}, ${a.house}: ${when}. ${it.reason || ''}`.trim(), tag: `addr-${a.op}-${a.street}-${a.house}` }
+    : { title: `${a.name} · планові роботи`, body: `За адресою ${a.street}, ${a.house}: ${when}. ${it.reason || ''}`.trim(), tag: `addr-plan-${a.op}-${a.street}-${a.house}-${it.start}` };
 }
 
 async function fetchText(url, init = {}) {
@@ -171,13 +200,13 @@ function reminder(data, a, lead, now, t) {
 
 // ---------- переклад сповіщень (en/de) ----------
 const L10N = {
-  en: [[/Сповіщення працюють ✓/, 'Notifications work ✓'], [/графік на сьогодні змінено/, 'today’s schedule changed'], [/графік на завтра змінено/, 'tomorrow’s schedule changed'],
+  en: [[/аварійне відключення/, 'emergency outage'], [/планові роботи/, 'planned works'], [/^За адресою /, 'At '], [/Сповіщення працюють ✓/, 'Notifications work ✓'], [/графік на сьогодні змінено/, 'today’s schedule changed'], [/графік на завтра змінено/, 'tomorrow’s schedule changed'],
     [/графік на (\S+) змінено/, 'schedule for $1 changed'], [/графік на сьогодні/, 'schedule for today'], [/графік на завтра/, 'schedule for tomorrow'], [/графік на (\S+)/, 'schedule for $1'],
     [/Відключень не заплановано/, 'No outages planned'], [/Відключення: /, 'Outages: '], [/ · разом /, ' · total '], [/Тепер: /, 'Now: '], [/\. Було: /, '. Before: '],
     [/відключення через (\d+) хв/, 'outage in $1 min'], [/світло через (\d+) хв/, 'power back in $1 min'], [/За графіком відновлення о /, 'Scheduled to return at '],
     [/За графіком /, 'Scheduled '], [/ · черга /, ' · queue '], [/(\d+) год/g, '$1 h'], [/(\d+) хв/g, '$1 min'],
     [/^Дім/, 'Home'], [/^Робота/, 'Work'], [/^Батьки/, 'Parents'], [/^Дача/, 'Cottage'], [/^Інше/, 'Other'], [/^Адреса/, 'Address']],
-  de: [[/Сповіщення працюють ✓/, 'Benachrichtigungen funktionieren ✓'], [/графік на сьогодні змінено/, 'Plan für heute geändert'], [/графік на завтра змінено/, 'Plan für morgen geändert'],
+  de: [[/аварійне відключення/, 'Notabschaltung'], [/планові роботи/, 'geplante Arbeiten'], [/^За адресою /, 'Adresse '], [/Сповіщення працюють ✓/, 'Benachrichtigungen funktionieren ✓'], [/графік на сьогодні змінено/, 'Plan für heute geändert'], [/графік на завтра змінено/, 'Plan für morgen geändert'],
     [/графік на (\S+) змінено/, 'Plan für $1 geändert'], [/графік на сьогодні/, 'Plan für heute'], [/графік на завтра/, 'Plan für morgen'], [/графік на (\S+)/, 'Plan für $1'],
     [/Відключень не заплановано/, 'Keine Abschaltungen geplant'], [/Відключення: /, 'Abschaltungen: '], [/ · разом /, ' · gesamt '], [/Тепер: /, 'Jetzt: '], [/\. Було: /, '. Vorher: '],
     [/відключення через (\d+) хв/, 'Abschaltung in $1 Min.'], [/світло через (\d+) хв/, 'Strom zurück in $1 Min.'], [/За графіком відновлення о /, 'Laut Plan zurück um '],
@@ -199,10 +228,10 @@ async function getSubs(env) { return JSON.parse(await env.KV.get('subs') || '{}'
 async function subscribe(env, body) {
   const { subscription, addrs, lead, types, lang } = body || {};
   if (!subscription?.endpoint || !subscription?.keys?.p256dh) throw new Error('bad subscription');
-  const clean = (addrs || []).slice(0, 10).map(a => ({ op: String(a.op).slice(0, 20), queue: String(a.queue).slice(0, 8), name: String(a.name || 'Адреса').slice(0, 20) }));
+  const clean = (addrs || []).slice(0, 10).map(a => ({ op: String(a.op).slice(0, 20), queue: String(a.queue).slice(0, 8), name: String(a.name || 'Адреса').slice(0, 20), city: String(a.city || '').slice(0, 60), street: String(a.street || '').slice(0, 80), house: String(a.house || '').slice(0, 12) }));
   const subs = await getSubs(env);
   const id = await idOf(subscription.endpoint);
-  const next = { sub: { endpoint: subscription.endpoint, keys: subscription.keys }, addrs: clean, lead: [15, 30, 60].includes(+lead) ? +lead : 30, types: types || {}, lang: ['en', 'de'].includes(lang) ? lang : 'uk' };
+  const next = { sub: { endpoint: subscription.endpoint, keys: subscription.keys }, addrs: clean, seen: subs[id]?.seen || [], lead: [15, 30, 60].includes(+lead) ? +lead : 30, types: types || {}, lang: ['en', 'de'].includes(lang) ? lang : 'uk' };
   if (JSON.stringify(subs[id]) === JSON.stringify(next)) return { ok: true, id, unchanged: true };
   subs[id] = next;
   await env.KV.put('subs', JSON.stringify(subs));

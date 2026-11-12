@@ -170,7 +170,14 @@ const T = [
   ['Чернігівобленерго', 'Chernihivoblenergo', 'Chernihivoblenergo'],
   ['графік в один клік.', 'schedule in one click.', 'Plan mit einem Klick.'],
   ['Миттєво', 'Instantly', 'Sofort'], ['зараз', 'now', 'jetzt'], ['Відключення о', 'Outage at', 'Abschaltung um'], ['Відновлення о', 'Power returns at', 'Strom zurück um'],
-  ['Графік на добу', 'Schedule for the day', 'Tagesplan'], ['Черга', 'Queue', 'Gruppe'], ['Українська', 'Українська', 'Українська'], ['English', 'English', 'English'], ['Deutsch', 'Deutsch', 'Deutsch'],
+  ['Графік на добу', 'Schedule for the day', 'Tagesplan'],
+  ['Аварійне відключення за вашою адресою', 'Emergency outage at your address', 'Notabschaltung an Ihrer Adresse'], ['Планові роботи зараз', 'Planned works now', 'Geplante Arbeiten jetzt'],
+  ['Планові роботи за вашою адресою', 'Planned works at your address', 'Geplante Arbeiten an Ihrer Adresse'],
+  ['За вашою адресою аварій і планових робіт не зареєстровано', 'No emergencies or planned works registered at your address', 'Keine Störungen oder geplanten Arbeiten an Ihrer Adresse gemeldet'],
+  ['Аварії та роботи за адресою', 'Emergencies and works at the address', 'Störungen und Arbeiten an der Adresse'], ['Хмельницька й Одеська області', 'Khmelnytskyi and Odesa oblasts', 'Oblaste Chmelnyzkyj und Odessa'],
+  ['ваш будинок', 'your house', 'Ihr Haus'], ['уся вулиця', 'the whole street', 'die ganze Straße'], ['увесь населений пункт', 'the whole settlement', 'der ganze Ort'], ['джерело', 'source', 'Quelle'],
+  ['Екстренні відключення (Аварійне без застосування графіку погодинних відключень)', 'Emergency outage (not part of the hourly schedule)', 'Notabschaltung (außerhalb des Stundenplans)'],
+  ['Аварійні', 'Emergency', 'Notfall'], ['Планові', 'Planned', 'Geplant'], ['Черга', 'Queue', 'Gruppe'], ['Українська', 'Українська', 'Українська'], ['English', 'English', 'English'], ['Deutsch', 'Deutsch', 'Deutsch'],
 ];
 const DICT = { en: new Map(), de: new Map() };
 for (const [uk, en, de] of T) { DICT.en.set(uk, en); DICT.de.set(uk, de); }
@@ -180,6 +187,9 @@ const D = s => s.replace(/(\d+) год/g, (_, n) => n + dur[lang][0]).replace(/(
 const op = name => DICT[lang].get(name) || name;
 // [регулярний вираз, en(…групи), de(…групи)]
 const P = [
+  [/^· перевірено о (.+)$/, t => `· checked at ${t}`, t => `· geprüft um ${t}`],
+  [/^(.+) · перевірено о (\S+) ·$/, (o, t) => `${op(o)} · checked at ${t} ·`, (o, t) => `${op(o)} · geprüft um ${t} ·`],
+  [/^орієнтовно до (.+)$/, t => `until about ${t}`, t => `voraussichtlich bis ${t}`],
   [/^Обрати (.+)$/, q => `Choose ${q}`, q => `${q} wählen`],
   [/^(Світло є|Відключення|Можливе|Невідомо|Аварія|Можливе відключення) (\d.*)$/, (a, b) => `${tr(a)} ${b}`, (a, b) => `${tr(a)} ${b}`],
   [/^Для всіх ваших адрес \((\d+)\)$/, n => `For all your addresses (${n})`, n => `Für alle Ihre Adressen (${n})`],

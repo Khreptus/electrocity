@@ -51,7 +51,44 @@ async function render() {
   $app.innerHTML = side + `<div class="desk-wrap"><main class="view ${tabs ? '' : 'no-tabs'}">${html}</main></div>` + (tabs ? tabbar() : '');
   if (view === 'ob-city') initCity();
   if (view === 'ob-address') initAddress();
+  if (view === 'home' && cur()) addrStatus(cur());
   document.title = view === 'home' && cur() ? `${cur().name} · Electrocity` : 'Electrocity — графік відключень';
+}
+
+// ---------- Стан за конкретною адресою: аварійні й планові відключення ----------
+const ADDR_OPS = new Set(['hoe', 'dtek-oem']);
+const addrCache = {};
+const hm = iso => iso ? iso.slice(11, 16) : '…';
+const dmy = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '';
+function when(it) {
+  const { date } = kyivNow(); const d = x => (x && x.slice(0, 10) !== date ? dmy(x) + ' ' : '');
+  if (it.start && it.end) return `${d(it.start)}${hm(it.start)} – ${d(it.end)}${hm(it.end)}`;
+  if (it.end) return `орієнтовно до ${d(it.end)}${hm(it.end)}`;
+  return it.start ? `з ${d(it.start)}${hm(it.start)}` : '';
+}
+async function addrStatus(a) {
+  const box = document.getElementById('addr-status'); if (!box) return;
+  const op = region(a.regionId)?.op;
+  if (!API_READY || !ADDR_OPS.has(op) || !a.street || !a.house) return;
+  const key = [op, a.city, a.street, a.house].join('|');
+  let r = addrCache[key];
+  if (!r || Date.now() - r.t > 120e3) {
+    try { const q = new URLSearchParams({ op, city: a.city, street: a.street, house: a.house });
+      r = { t: Date.now(), j: await (await fetch(`${API}api/outage?${q}`)).json() }; addrCache[key] = r; } catch { return; }
+  }
+  const j = r.j; if (!j?.ok || !j.supported || !document.contains(box)) return;
+  const { date, min } = kyivNow(); const nowIso = `${date}T${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  const items = (j.items || []).filter(it => it.kind !== 'schedule');
+  const active = items.filter(it => (!it.start || it.start <= nowIso) && (!it.end || it.end > nowIso));
+  const scopeTxt = it => it.scope === 'house' ? 'ваш будинок' : it.scope === 'street' ? 'уся вулиця' : 'увесь населений пункт';
+  const checked = j.checkedAt ? new Date(j.checkedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
+  const src = `<div class="cap" style="margin-top:6px">${esc(j.source)} · перевірено о ${checked} · <a href="${j.url}" target="_blank" rel="noopener">джерело</a></div>`;
+  if (!items.length) { box.innerHTML = `<div class="addr-ok">${ic('shield')}<span>За вашою адресою аварій і планових робіт не зареєстровано</span><span class="cap">· ${checked}</span></div>`; return; }
+  box.innerHTML = items.slice(0, 3).map(it => {
+    const now = active.includes(it); const em = it.kind === 'emergency';
+    const title = em ? (now ? 'Аварійне відключення за вашою адресою' : 'Аварійне відключення') : (now ? 'Планові роботи зараз' : 'Планові роботи за вашою адресою');
+    return `<div class="banner ${em ? 'err' : 'warn'}">${ic('alert')}<div><div class="bt">${title}</div><div class="bb">${esc(when(it))} · ${scopeTxt(it)}${it.reason ? `<br>${esc(it.reason)}` : ''}</div>${src}</div></div>`;
+  }).join('');
 }
 
 function tabbar() {
@@ -148,7 +185,7 @@ async function home() {
   const evs = isToday ? upcomingEvents(segs, min).slice(0, 3) : (segs || []);
   const scaleBlock = segs ? scaleHTML(segs, isToday ? min : null) :
     `<div class="empty-day">${ic('calendar')}<div class="h-s" style="font-size:16px">Графік на ${isToday ? 'сьогодні' : 'завтра'} ще не опубліковано</div><div class="body-s">Зазвичай оператор публікує його ввечері.</div></div>`;
-  return stage(a, h) + `<section class="sheet">${banners(data)}
+  return stage(a, h) + `<section class="sheet">${banners(data)}<div id="addr-status"></div>
    <div class="card"><div class="row-head"><div class="h-s">Графік на ${isToday ? 'сьогодні' : 'завтра'}</div><button class="link" data-go="detail">Детальніше ${ic('chevron-right')}</button></div>
    <div class="seg" role="group"><button data-day="0" aria-pressed="${isToday}">Сьогодні</button><button data-day="1" aria-pressed="${!isToday}" ${tmr ? '' : ''}>Завтра</button></div>
    ${scaleBlock}${evs.map(s => evRow(s, min, isToday)).join('')}${sourceLine(data, a)}</div></section>`;
@@ -322,7 +359,7 @@ async function notifSheet() {
     body = `<div class="h-s" style="font-size:22px">Сповіщення</div>
     <button class="li" data-act="npush" style="background:var(--surface-2);border-radius:16px"><span class="lt">${ic('bell')}</span><span class="tx"><span class="tt">Надсилати сповіщення</span><br><span class="st">Для всіх ваших адрес (${S.addresses.length})</span></span><span class="toggle" role="switch" aria-checked="${!!N.enabled}"></span></button>
     ${N.enabled ? `<div class="cap">Попереджати за</div><div class="seg">${[15, 30, 60].map(m => `<button data-act="nlead" data-v="${m}" aria-pressed="${N.lead === m}">${m === 60 ? '1 год' : m + ' хв'}</button>`).join('')}</div>
-    <div class="list" style="background:var(--surface-2)">${tg('before', 'Перед відключенням')}${tg('restore', 'Перед відновленням')}${tg('change', 'Графік змінено', 'Що саме змінилось: було → стало')}${tg('tomorrow', 'Опубліковано графік на завтра')}</div>
+    <div class="list" style="background:var(--surface-2)">${tg('before', 'Перед відключенням')}${tg('restore', 'Перед відновленням')}${tg('change', 'Графік змінено', 'Що саме змінилось: було → стало')}${tg('tomorrow', 'Опубліковано графік на завтра')}${tg('address', 'Аварії та роботи за адресою', 'Хмельницька й Одеська області')}</div>
     <button class="btn secondary" data-act="ntest">Надіслати тестове сповіщення</button>` : `<div class="body-s">Попередимо перед відключенням і відновленням, повідомимо про зміни графіка й публікацію графіка на завтра.</div>`}`;
   }
   openSheet(body + `<button class="btn ghost" data-act="close">Закрити</button>`);
@@ -336,7 +373,7 @@ async function pushSub(create) {
 async function syncPush() {
   if (!S.notify.enabled || !API_READY) return;
   try { const sub = await pushSub(false); if (!sub) return;
-    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, lang: S.lang, addrs: S.addresses.map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name })) }) });
+    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, lang: S.lang, addrs: S.addresses.map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name, city: a.city, street: a.street, house: a.house })) }) });
   } catch {}
 }
 
