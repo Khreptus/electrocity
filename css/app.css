@@ -275,5 +275,5 @@ a.btn,a.li{text-decoration:none;color:inherit}a.btn.primary{color:var(--inverse-
 
 /* стан за адресою */
 #addr-status{display:flex;flex-direction:column;gap:8px}#addr-status:empty{display:none}
-.addr-ok{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px;line-height:18px;color:var(--text-2);padding:2px 4px}.addr-ok svg{width:16px;height:16px;color:var(--on)}
+.addr-ok{display:flex;gap:6px;align-items:flex-start;font-size:13px;line-height:18px;color:var(--text-2);padding:2px 4px}.addr-ok svg{width:16px;height:16px;flex:none;margin-top:1px;color:var(--on)}.addr-ok .t{white-space:nowrap;color:var(--text-3)}
 #addr-status .banner a{color:inherit;text-decoration:underline}

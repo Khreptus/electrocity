@@ -95,7 +95,7 @@ async function addrStatus(a) {
     const tm = hero.querySelector('.timer, .note');
     if (tm) tm.outerHTML = `<div class="note">${ic('clock')}${em.end ? `Орієнтовне відновлення о ${isoHM(em.end)}${em.end.slice(0, 10) !== date ? ' (' + isoDM(em.end) + ')' : ''}` : 'Час відновлення невідомий'}</div>`;
   }
-  if (!items.length) { box.innerHTML = `<div class="addr-ok">${ic('shield')}<span>За вашою адресою аварій і планових робіт не зареєстровано</span><span class="cap">· ${checked}</span></div>`; return; }
+  if (!items.length) { box.innerHTML = `<div class="addr-ok">${ic('shield')}<span>За вашою адресою аварій і планових робіт не зареєстровано<span class="t"> | ${checked}</span></span></div>`; return; }
   box.innerHTML = items.slice(0, 3).map(it => {
     const now = active.includes(it); const em = it.kind === 'emergency';
     const title = em ? (now ? 'Аварійне відключення за вашою адресою' : 'Аварійне відключення') : (now ? 'Планові роботи зараз' : 'Планові роботи за вашою адресою');
