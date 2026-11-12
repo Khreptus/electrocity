@@ -58,13 +58,13 @@ async function render() {
 // ---------- Стан за конкретною адресою: аварійні й планові відключення ----------
 const ADDR_OPS = new Set(['hoe', 'dtek-oem']);
 const addrCache = {};
-const hm = iso => iso ? iso.slice(11, 16) : '…';
-const dmy = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '';
-function when(it) {
-  const { date } = kyivNow(); const d = x => (x && x.slice(0, 10) !== date ? dmy(x) + ' ' : '');
-  if (it.start && it.end) return `${d(it.start)}${hm(it.start)} – ${d(it.end)}${hm(it.end)}`;
-  if (it.end) return `орієнтовно до ${d(it.end)}${hm(it.end)}`;
-  return it.start ? `з ${d(it.start)}${hm(it.start)}` : '';
+const isoHM = iso => iso ? iso.slice(11, 16) : '…';
+const isoDM = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '';
+function whenTxt(it) {
+  const { date } = kyivNow(); const d = x => (x && x.slice(0, 10) !== date ? isoDM(x) + ' ' : '');
+  if (it.start && it.end) return `${d(it.start)}${isoHM(it.start)} – ${d(it.end)}${isoHM(it.end)}`;
+  if (it.end) return `орієнтовно до ${d(it.end)}${isoHM(it.end)}`;
+  return it.start ? `з ${d(it.start)}${isoHM(it.start)}` : '';
 }
 async function addrStatus(a) {
   const box = document.getElementById('addr-status'); if (!box) return;
@@ -87,7 +87,7 @@ async function addrStatus(a) {
   box.innerHTML = items.slice(0, 3).map(it => {
     const now = active.includes(it); const em = it.kind === 'emergency';
     const title = em ? (now ? 'Аварійне відключення за вашою адресою' : 'Аварійне відключення') : (now ? 'Планові роботи зараз' : 'Планові роботи за вашою адресою');
-    return `<div class="banner ${em ? 'err' : 'warn'}">${ic('alert')}<div><div class="bt">${title}</div><div class="bb">${esc(when(it))} · ${scopeTxt(it)}${it.reason ? `<br>${esc(it.reason)}` : ''}</div>${src}</div></div>`;
+    return `<div class="banner ${em ? 'err' : 'warn'}">${ic('alert')}<div><div class="bt">${title}</div><div class="bb">${esc(whenTxt(it))} · ${scopeTxt(it)}${it.reason ? `<br>${esc(it.reason)}` : ''}</div>${src}</div></div>`;
   }).join('');
 }
 
