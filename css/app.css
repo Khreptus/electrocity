@@ -51,7 +51,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .view.no-tabs{padding-bottom:0}
 
 /* ===== Stage ===== */
-.stage{position:relative;background:var(--stage-bg);color:var(--stage-text);padding:calc(var(--safe-t) + 12px) 20px 64px;overflow:hidden}
+.stage{position:relative;background:var(--stage-bg);color:var(--stage-text);padding:calc(var(--safe-t) + 12px) 20px 96px;overflow:hidden}
 .stage .glow{position:absolute;left:50%;top:calc(var(--safe-t) + 40px);width:200px;height:200px;margin-left:-100px;border-radius:50%;filter:blur(70px);background:var(--glow,var(--glow-off));transition:background .6s ease,opacity .6s ease}
 .stage .lamp{position:absolute;left:50%;top:0;width:194px;margin-left:-97px;height:auto;pointer-events:none;user-select:none}
 .stage .lamp.on{opacity:0;transition:opacity .6s ease}
@@ -84,7 +84,8 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .st-unknown .sub,.st-emergency .sub,.st-possible .sub{color:var(--stage-text-2)}
 
 /* ===== Sheet ===== */
-.sheet{background:var(--bg);border-radius:45px 45px 0 0;margin-top:-24px;padding:20px 20px 24px;display:flex;flex-direction:column;gap:12px;position:relative;flex:1}
+/* тёмний фон заходить під світлу секцію глибше за радіус скруглення — без «сходинок» по краях */
+.sheet{background:var(--bg);border-radius:45px 45px 0 0;margin-top:-56px;padding:20px 20px 24px;display:flex;flex-direction:column;gap:12px;position:relative;flex:1}
 .sheet.r32{border-radius:32px 32px 0 0}
 .card{background:var(--surface);border-radius:24px;padding:16px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:14px}
 .row-head{display:flex;justify-content:space-between;align-items:center}
@@ -184,7 +185,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;str
 .chip svg.i{width:14px;height:14px;color:var(--text-2)}
 
 /* top band for secondary screens */
-.band{background:var(--stage-bg);color:var(--stage-text);padding:calc(var(--safe-t) + 8px) 20px 28px;display:flex;flex-direction:column;gap:8px}
+.band{background:var(--stage-bg);color:var(--stage-text);padding:calc(var(--safe-t) + 8px) 20px 60px;display:flex;flex-direction:column;gap:8px}
 .band .bar{display:flex;align-items:center;justify-content:space-between;min-height:44px}
 .band .bar .ttl{font-size:17px;font-weight:600}
 .band .btn-ic{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--stage-tile);color:var(--stage-text)}

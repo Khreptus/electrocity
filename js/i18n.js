@@ -256,9 +256,5 @@ export function setLang(l) {
   });
   obs.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
 }
-// Мова за замовчуванням — з браузера (uk/ru → українська)
-export function detectLang() {
-  const l = (navigator.languages || [navigator.language || 'uk']).map(x => x.slice(0, 2));
-  for (const x of l) { if (x === 'uk' || x === 'ru') return 'uk'; if (x === 'de') return 'de'; if (x === 'en') return 'en'; }
-  return 'uk';
-}
+// Мова за замовчуванням — українська; англійська й німецька лише за вибором у налаштуваннях
+export function detectLang() { return 'uk'; }
