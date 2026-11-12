@@ -82,8 +82,9 @@ function analyse(data, items = []) {
   const i = all.findIndex(s => now.min >= s[0] && now.min < s[1]);
   let next = null;
   for (let k = i + 1; k < all.length; k++) { if (all[k][2] === 'unknown') break; if (isOff(all[k][2]) !== isOff(cur[2])) { next = all[k][0]; break; } }
+  let eod = false; if (next == null && cur[1] === 1440 && !tom) { next = 1440; eod = true; } // графіка на завтра ще немає — до кінця доби
   const midnight = new Date(Date.now() - now.min * 60000);
-  return { state: cur[2], now, today, tom, next, nextDate: next != null ? new Date(midnight.getTime() + next * 60000) : null };
+  return { state: cur[2], now, today, tom, next, eod, nextDate: next != null ? new Date(midnight.getTime() + next * 60000) : null };
 }
 
 // ---------- шкала доби ----------
@@ -119,7 +120,7 @@ async function build() {
   const t = col.addText(data ? TITLE[a.state] : 'Немає даних'); t.font = Font.boldSystemFont(fam === 'small' ? 18 : 22); t.textColor = titleColor; t.minimumScaleFactor = 0.7; t.lineLimit = 1;
   col.addSpacer(4);
   if (a.nextDate) {
-    const l = col.addText(isOff(a.state) ? 'до відновлення' : 'до відключення'); l.font = Font.mediumSystemFont(11); l.textColor = C.text3;
+    const l = col.addText(a.eod ? 'до кінця доби' : isOff(a.state) ? 'до відновлення' : 'до відключення'); l.font = Font.mediumSystemFont(11); l.textColor = C.text3;
     const d = col.addDate(a.nextDate); d.applyTimerStyle(); d.font = Font.semiboldMonospacedSystemFont(fam === 'small' ? 20 : 24); d.textColor = C.text; d.lineLimit = 1; d.minimumScaleFactor = 0.6;
   } else {
     const l = col.addText(data ? 'час зміни невідомий' : 'відкрийте застосунок'); l.font = Font.mediumSystemFont(11); l.textColor = C.text3;
@@ -131,7 +132,7 @@ async function build() {
   if (a.today) { const si = w.addImage(scaleImage(a.today, a.now.min, fam === 'small' ? 130 : 300, 10)); si.imageSize = new Size(fam === 'small' ? 130 : 300, 10); si.cornerRadius = 4; }
   w.addSpacer(4);
   const ft = w.addStack();
-  const f1 = ft.addText(a.nextDate ? `${isOff(a.state) ? 'світло о' : 'відкл. о'} ${hm(a.next)}` : ''); f1.font = Font.mediumMonospacedSystemFont(10); f1.textColor = C.text2;
+  const f1 = ft.addText(a.eod ? 'завтра: графіка ще немає' : a.nextDate ? `${isOff(a.state) ? 'світло о' : 'відкл. о'} ${hm(a.next)}` : ''); f1.font = Font.mediumMonospacedSystemFont(10); f1.textColor = C.text2;
   ft.addSpacer();
   const f2 = ft.addText(a.state === 'emergency' ? 'за адресою' : data?.demo ? 'демо' : cached ? 'офлайн' : 'за графіком'); f2.font = Font.mediumSystemFont(10); f2.textColor = C.text3;
 

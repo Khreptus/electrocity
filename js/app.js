@@ -169,9 +169,12 @@ function heroInfo(data, a) {
     const note = nc ? `Наступне відключення — завтра о ${hm(nc.at - 1440)}` : 'Світло за графіком до кінця доби';
     return { ...base, nc: null, title: 'Відключень немає', sub, note, srcTxt: segs.none ? 'За даними обленерго' : null };
   }
-  if (st === 'on') return { ...base, title: 'Світло є', sub: `${q} · з ${hm(s[0])} до ${hmEnd(s[1])}`, tl: 'До відключення', nl: 'Відключення о' };
-  if (st === 'off') return { ...base, title: 'Світла немає', sub: `Планове відключення · ${q}`, tl: 'До відновлення', nl: 'Відновлення о' };
-  if (st === 'possible') return { ...base, title: 'Можливе відключення', sub: `${q} · ${hm(s[0])}–${hmEnd(s[1])} · попередньо`, tl: 'До відключення', nl: 'Відключення о' };
+  // графік на сьогодні до 24:00, а на завтра ще не опублікований — рахуємо до кінця доби
+  if (!nc && s[1] === 1440 && ['on', 'off', 'possible'].includes(st) && !segmentsFor(data, addDays(date, 1), a.queue)) { base.nc = { at: 1440, state: 'unknown' }; base.eod = true; }
+  const eod = base.eod ? { tl: 'До кінця доби', nl: 'Графік на завтра', nxTxt: 'ще не опубліковано' } : {};
+  if (st === 'on') return { ...base, title: 'Світло є', sub: `${q} · з ${hm(s[0])} до ${hmEnd(s[1])}`, tl: 'До відключення', nl: 'Відключення о', ...eod };
+  if (st === 'off') return { ...base, title: 'Світла немає', sub: `Планове відключення · ${q}`, tl: 'До відновлення', nl: 'Відновлення о', ...eod };
+  if (st === 'possible') return { ...base, title: 'Можливе відключення', sub: `${q} · ${hm(s[0])}–${hmEnd(s[1])} · попередньо`, tl: 'До відключення', nl: 'Відключення о', ...eod };
   if (st === 'emergency') return { ...base, title: 'Аварійне відключення', sub: 'Оператор повідомив про аварію', note: 'Час відновлення невідомий' };
   return { ...base, title: 'Статус невідомий', sub: 'Немає достовірних даних на цей час', note: 'Час наступної зміни невідомий' };
 }
@@ -182,7 +185,7 @@ function stage(a, h, loading) {
   let body;
   if (loading) body = `<div class="hero"><div class="src"><span class="badge" style="background:${badgeBg}">${ic('refresh')}</span>За опублікованим графіком</div><h1 style="color:var(--stage-text)">Графік оновлюється</h1><div class="sub" style="color:var(--stage-text-2)">Перевіряємо джерела…</div><div style="display:grid;gap:8px;margin-top:16px"><div class="skel" style="width:180px"></div><div class="skel" style="width:120px"></div></div></div>`;
   else {
-    const timer = h.nc ? `<div class="timer"><div><div class="lbl">${h.tl}</div><div class="big" data-countdown="${h.nc.at}">${cd(h.nc.at - h.min)}</div></div><div><div class="lbl" style="text-align:right">${h.nl}</div><div class="nx">${hm(h.nc.at)}</div></div></div>`
+    const timer = h.nc ? `<div class="timer"><div><div class="lbl">${h.tl}</div><div class="big" data-countdown="${h.nc.at}">${cd(h.nc.at - h.min)}</div></div><div><div class="lbl" style="text-align:right">${h.nl}</div><div class="nx${h.nxTxt ? ' txt' : ''}">${h.nxTxt || hm(h.nc.at)}</div></div></div>`
       : `<div class="note">${ic('clock')}${h.note || 'Час наступної зміни невідомий'}</div>`;
     body = `<div class="hero st-${h.state}"><div class="src"><span class="badge" style="background:${badgeBg}">${ic(STATE_ICON[h.state] || 'help')}</span>${h.srcTxt || 'За опублікованим графіком'}</div><h1>${h.title}</h1><div class="sub">${esc(h.sub)}</div>${timer}</div>`;
   }
