@@ -448,7 +448,15 @@ addEventListener('online', render); addEventListener('offline', render);
 setInterval(() => { if (['home', 'detail', 'addresses'].includes(view) && !document.querySelector('.bsheet')) render(); }, 20000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator) {
+  // Нова версія: щойно новий SW бере керування — один раз перезавантажуємо, щоб одразу показати зміни.
+  const hadSW = !!navigator.serviceWorker.controller; let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadSW && !reloaded) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => {
+    r.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') r.update().catch(() => {}); });
+  }).catch(() => {});
+}
 
 // Таймер із секундами — оновлюється щосекунди без перерендеру
 setInterval(() => {
