@@ -5,7 +5,7 @@
 // • усе інше — статичні файли застосунку (ASSETS)
 import { parseDtek, parseHoe, parseMoe, SOURCES } from './sources.js';
 import { sendPush, vapidKeys } from './push.js';
-import { hoeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME } from './outages.js';
+import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME } from './outages.js';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 const json = (d, s = 200, h = {}) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, ...h } });
@@ -142,6 +142,7 @@ const dm = iso => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) : '';
 async function addrItems(env, a, now) {
   const nowIso = `${now.date}T${String(Math.floor(now.min / 60)).padStart(2, '0')}:${String(now.min % 60).padStart(2, '0')}`;
   if (a.op === 'hoe') return (await hoeAddress(env, a, nowIso)).items;
+  if (a.op === 'moe') return (await moeAddress(a, nowIso)).items.filter(it => it.kind !== 'schedule');
   if (DTEK_NAME[a.op] && a.op !== 'dtek-dnem') return dtekHouseStatus(await dtekStreet(a.op, a.city, a.street), a.op, a.house).items;
   return [];
 }

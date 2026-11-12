@@ -95,6 +95,56 @@ export function matchHoe(events, { city, street, house }, nowIso) {
   return out.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
 }
 
+// ---------- Миколаївобленерго ----------
+// Офіційний сервіс «Перерви електропостачання» (energy.mk.ua/vidklyuchennya), без капчі:
+// довідник адрес (дільниця → нас. пункт → вулиця → будинок) і пошук подій за будинком.
+const MOE_API = 'https://www.energy.mk.ua/outage/api/v1/';
+const MOE_BRANCHES = Array.from({ length: 20 }, (_, i) => i + 2); // дільниці 2…21
+const moeHeaders = { 'User-Agent': UA, Accept: 'application/json', 'Content-Type': 'application/json', Referer: 'https://www.energy.mk.ua/vidklyuchennya/' };
+const vals = x => Array.isArray(x) ? x : Object.values(x || {});
+async function cachedJson(key, ttl, ctx, load) {
+  const ck = new Request(`https://cache.electrocity/moe/${key}`);
+  const hit = await caches.default.match(ck); if (hit) return hit.json();
+  const data = await load();
+  const put = caches.default.put(ck, new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${ttl}` } }));
+  ctx?.waitUntil ? ctx.waitUntil(put) : await put;
+  return data;
+}
+const moeGet = u => fetch(MOE_API + u, { headers: moeHeaders }).then(r => { if (!r.ok) throw new Error(`MOE ${r.status}`); return r.json(); });
+// Усі населені пункти області: [[назва, дільниця, id]] — кеш 7 днів
+const moeCities = ctx => cachedJson('cities', 7 * 86400, ctx, async () => {
+  const out = [];
+  await Promise.all(MOE_BRANCHES.map(b => moeGet(`address/branch/${b}/city`).then(cs => vals(cs).forEach(c => out.push([c.name, b, c.id]))).catch(() => {})));
+  if (!out.length) throw new Error('MOE: довідник порожній');
+  return out;
+});
+// UTC «2026-11-12T01:12:00.000000Z» → київський «2026-11-12T03:12»
+const kyivIso = s => {
+  if (!s) return null; const d = new Date(s); if (isNaN(d)) return null;
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Kyiv', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+};
+const MOE_KIND = { AVARIYA: 'emergency', PLAN: 'planned', GAO: 'schedule' };
+export async function moeAddress({ city, street, house }, nowIso, ctx) {
+  const pk = placeKey(city), sk = streetKey(street), hk = houseKey(house);
+  const cands = (await moeCities(ctx)).filter(([n]) => placeKey(n) === pk);
+  for (const [, branch, cityId] of cands) {
+    const streets = vals(await cachedJson(`st/${cityId}`, 86400, ctx, () => moeGet(`address/city/${cityId}/street`)));
+    const st = streets.find(x => streetKey(x.name) === sk); if (!st) continue;
+    const houses = vals(await cachedJson(`h/${st.id}`, 86400, ctx, () => moeGet(`address/street/${st.id}/house`)));
+    const h = houses.find(x => houseKey(x.name) === hk); if (!h) continue;
+    const day = Math.floor(Date.now() / 1e3); const from = day - 86400, to = day + 3 * 86400;
+    const r = await cachedJson(`ev/${branch}/${h.id}/${Math.floor(day / 300)}`, 300, ctx, () =>
+      fetch(MOE_API + 'outage', { method: 'POST', headers: moeHeaders, body: JSON.stringify({ page: 1, perPage: 50, from, to, branch, house_id: h.id }) })
+        .then(x => { if (!x.ok) throw new Error(`MOE ${x.status}`); return x.json(); }));
+    const items = vals(r.data).map(e => ({ kind: MOE_KIND[e.type] || 'planned', reason: e.reason || '', start: kyivIso(e.start_at), end: kyivIso(e.finish_at), scope: 'house', source: 'Миколаївобленерго' }))
+      .filter(it => !(it.end && nowIso && it.end < nowIso))
+      .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    return { found: true, at: new Date().toISOString(), items };
+  }
+  return { found: false, at: new Date().toISOString(), items: [] };
+}
+
 // ---------- ДТЕК ----------
 const DTEK_HOST = { 'dtek-oem': 'https://www.dtek-oem.com.ua', 'dtek-dnem': 'https://www.dtek-dnem.com.ua', 'dtek-kem': 'https://www.dtek-kem.com.ua', 'dtek-krem': 'https://www.dtek-krem.com.ua', 'dtek-dem': 'https://www.dtek-dem.com.ua' };
 export const DTEK_NAME = { 'dtek-oem': 'ДТЕК Одеські електромережі', 'dtek-dnem': 'ДТЕК Дніпровські електромережі', 'dtek-kem': 'ДТЕК Київські електромережі', 'dtek-krem': 'ДТЕК Київські регіональні електромережі', 'dtek-dem': 'ДТЕК Донецькі електромережі' };
@@ -137,6 +187,10 @@ export async function addressStatus(env, params, ctx, nowIso) {
   if (op === 'hoe') {
     const r = await hoeAddress(env, { city, street, house }, nowIso, ctx);
     return { ok: true, supported: true, checkedAt: r.at, items: r.items, source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/all' };
+  }
+  if (op === 'moe') {
+    const r = await moeAddress({ city, street, house }, nowIso, ctx);
+    return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: 'Миколаївобленерго', url: 'https://www.energy.mk.ua/vidklyuchennya/' };
   }
   if (op in DTEK_HOST && op !== 'dtek-dnem') {
     const raw = await dtekStreet(op, city, street, ctx);

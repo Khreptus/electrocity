@@ -56,7 +56,7 @@ async function render() {
 }
 
 // ---------- Стан за конкретною адресою: аварійні й планові відключення ----------
-const ADDR_OPS = new Set(['hoe', 'dtek-oem']);
+const ADDR_OPS = new Set(['hoe', 'dtek-oem', 'moe']);
 const addrCache = {};
 const isoHM = iso => iso ? iso.slice(11, 16) : '…';
 const isoDM = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '';
