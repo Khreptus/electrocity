@@ -3,7 +3,7 @@
 // Оператори: dtek-oem (Одеська) · dtek-dnem (Дніпро, Кривий Ріг) · hoe (Хмельницька) · moe (Миколаївська)
 // Статус — за опублікованим графіком оператора, а не фактична наявність світла.
 
-const BASE = 'https://khreptus.github.io/electrocity/';
+const BASE = 'https://electrocity.slv463991.workers.dev/';
 const [OP, QUEUE, NAME] = ((args.widgetParameter || 'dtek-oem|3.2|Дім').split('|')).map(s => s.trim());
 const C = {
   bg: new Color('#1B1B1B'), text: new Color('#F3F4F1'), text2: new Color('#9A9B99'), text3: new Color('#6B7078'),
@@ -25,8 +25,13 @@ const isOff = s => s === 'off' || s === 'emergency';
 async function load() {
   const fm = FileManager.local(); const cache = fm.joinPath(fm.cacheDirectory(), `svitlo-${OP}.json`);
   try {
-    const r = new Request(`${BASE}data/schedules/${OP}.json?m=${Math.floor(Date.now() / 60000)}`); r.timeoutInterval = 15;
-    const data = await r.loadJSON(); fm.writeString(cache, JSON.stringify(data)); return { data, cached: false };
+    // свіжі графіки з сервера (оновлюються кожні 15 хв); запасний варіант — статичний файл
+    let data = null;
+    for (const u of [`${BASE}api/schedules/${OP}`, `${BASE}data/schedules/${OP}.json`]) {
+      try { const r = new Request(`${u}${u.includes('?') ? '&' : '?'}m=${Math.floor(Date.now() / 60000)}`); r.timeoutInterval = 15; data = await r.loadJSON(); if (data?.days) break; } catch {}
+    }
+    if (!data?.days) throw new Error('no data');
+    fm.writeString(cache, JSON.stringify(data)); return { data, cached: false };
   } catch (e) {
     if (fm.fileExists(cache)) return { data: JSON.parse(fm.readString(cache)), cached: true };
     return { data: null, cached: false };
