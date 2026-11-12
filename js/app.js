@@ -66,6 +66,38 @@ function whenTxt(it) {
   if (it.end) return `орієнтовно до ${d(it.end)}${isoHM(it.end)}`;
   return it.start ? `з ${d(it.start)}${isoHM(it.start)}` : '';
 }
+// Аварії / планові роботи за адресою — поверх добової шкали та списку подій
+const isoMin = iso => +iso.slice(11, 13) * 60 + +iso.slice(14, 16);
+function overlaySegs(segs, items, d) {
+  let out = (segs || [[0, 1440, 'unknown']]).map(s => [s[0], s[1], s[2]]); let hit = false;
+  for (const it of items) {
+    const sd = it.start ? it.start.slice(0, 10) : null, ed = it.end ? it.end.slice(0, 10) : null;
+    if ((sd && sd > d) || (ed && ed < d)) continue;
+    const a = !sd || sd < d ? 0 : isoMin(it.start), b = !ed || ed > d ? 1440 : isoMin(it.end);
+    if (a >= b) continue; hit = true;
+    const st = it.kind === 'emergency' ? 'emergency' : 'off', next = [];
+    for (const s of out) { if (s[0] < a) next.push([s[0], Math.min(s[1], a), s[2]]); if (s[1] > b) next.push([Math.max(s[0], b), s[1], s[2]]); }
+    next.push([a, b, st]); out = next.filter(s => s[1] > s[0]).sort((x, y) => x[0] - y[0]);
+  }
+  if (!hit) return null;
+  return out.reduce((m, s) => { const l = m[m.length - 1]; if (l && l[2] === s[2] && l[1] === s[0]) l[1] = s[1]; else m.push(s); return m; }, []);
+}
+let shownOverlay = null;
+async function overlayScale(a, items) {
+  shownOverlay = null; if (!items.length) return;
+  const { date, min } = kyivNow(); const d = addDays(date, day); const isToday = day === 0;
+  const data = await loadSchedule(region(a.regionId).op);
+  const segs = overlaySegs(segmentsFor(data, d, a.queue), items, d); if (!segs) return;
+  shownOverlay = { id: a.id, d, segs };
+  const sc = document.querySelector('.sheet .scale:not(.compact)') || document.querySelector('.sheet .empty-day');
+  if (!sc) return;
+  sc.outerHTML = sc.classList.contains('empty-day') && view === 'detail' ? `<div class="card">${scaleHTML(segs, isToday ? min : null)}</div>` : scaleHTML(segs, isToday ? min : null);
+  const rows = [...document.querySelectorAll('.sheet .ev')];
+  const evs = view === 'detail' ? segs : isToday ? upcomingEvents(segs, min).slice(0, 3) : segs;
+  const html = evs.map(s => evRow(s, min, isToday)).join('');
+  if (rows.length) { rows[0].insertAdjacentHTML('beforebegin', html); rows.forEach(r => r.remove()); }
+  else document.querySelector('.sheet .scale:not(.compact)')?.insertAdjacentHTML('afterend', html);
+}
 async function addrStatus(a) {
   const box = document.getElementById('addr-status'); if (!box) return;
   const op = region(a.regionId)?.op;
@@ -95,6 +127,7 @@ async function addrStatus(a) {
     const tm = hero.querySelector('.timer, .note');
     if (tm) tm.outerHTML = `<div class="note">${ic('clock')}${em.end ? `Орієнтовне відновлення о ${isoHM(em.end)}${em.end.slice(0, 10) !== date ? ' (' + isoDM(em.end) + ')' : ''}` : 'Час відновлення невідомий'}</div>`;
   }
+  await overlayScale(a, items);
   if (!items.length) { box.innerHTML = `<div class="addr-ok">${ic('shield')}<span>За вашою адресою аварій і планових робіт не зареєстровано<span class="t"> | ${checked}</span></span></div>`; return; }
   box.innerHTML = items.slice(0, view === 'detail' ? 20 : 3).map(it => {
     const now = active.includes(it); const em = it.kind === 'emergency';
@@ -342,7 +375,9 @@ function toast(t) { document.querySelector('.toast')?.remove(); const d = docume
 
 async function segSheet(i) {
   const a = cur(); const data = await loadSchedule(region(a.regionId).op); const { date } = kyivNow();
-  const s = segmentsFor(data, addDays(date, day), a.queue)[i]; if (!s) return;
+  const d = addDays(date, day);
+  const list = shownOverlay && shownOverlay.id === a.id && shownOverlay.d === d ? shownOverlay.segs : segmentsFor(data, d, a.queue);
+  const s = list?.[i]; if (!s) return; const st = s[2];
   const title = st === 'on' && s[0] === 0 && s[1] === 1440 ? 'Без відключень' : { on: 'Світло є', off: 'Планове відключення', possible: 'Можливе відключення', unknown: 'Немає даних', emergency: 'Аварійне відключення' }[s[2]];
   openSheet(`<div style="display:flex;gap:12px;align-items:center"><span class="b ${s[2]}" style="width:44px;height:44px;border-radius:14px;display:grid;place-items:center">${ic(STATE_ICON[s[2]])}</span><div><div class="h-s" style="font-size:22px">${title}</div><div class="cap">${day ? 'Завтра' : 'Сьогодні'} · Черга ${esc(a.queue)}</div></div></div>
    <div class="times"><div><div class="cap3">Початок</div><div class="mono" style="font-size:20px;font-weight:600">${hm(s[0])}</div></div><div><div class="cap3">Кінець</div><div class="mono" style="font-size:20px;font-weight:600">${hmEnd(s[1])}</div></div><div><div class="cap3">Тривалість</div><div style="font-weight:500;margin-top:2px">${dur(s[1] - s[0])}</div></div></div>
