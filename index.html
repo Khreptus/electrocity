@@ -32,6 +32,10 @@
 #pre .lit{stroke:#fff;stroke-width:12;stroke-miterlimit:16;stroke-dasharray:.5 1;stroke-dashoffset:.5;filter:drop-shadow(0 0 4px rgba(255,214,140,.9));animation:pTrace .55s cubic-bezier(.4,0,.2,1) .9s forwards}
 #pre .amb{opacity:0;animation:pIgnite .6s linear 1.4s forwards}
 #pre p{color:#F3F4F1;font-size:clamp(24px,6.4vw,30px);font-weight:700;line-height:1.25;letter-spacing:-.01em;text-align:center;opacity:0;transform:translateY(8px);animation:pText .5s ease 1.75s forwards}
+#pre .prog{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 44px);transform:translateX(-50%);display:flex;align-items:center;gap:12px}
+#pre .bar{width:140px;height:2px;border-radius:2px;background:#24262A;overflow:hidden}
+#pre .bar i{display:block;height:100%;background:#E39A0B;transform-origin:0 50%;transform:scaleX(0)}
+#pre .pct{min-width:4ch;color:#8A8E95;font:600 13px/1 "Geist Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;text-align:right}
 @keyframes pWire{to{stroke-dashoffset:0}}
 @keyframes pSpark{0%{opacity:1;stroke-dashoffset:.05}92%{opacity:1}100%{opacity:0;stroke-dashoffset:-.985}}
 @keyframes pTrace{to{stroke-dashoffset:0;filter:drop-shadow(0 0 0 transparent)}}
@@ -48,7 +52,10 @@
   <path class="dim" d="M219.725 77.8746L202.68 150.033L196.2 174.462L196.195 174.485L187.207 208.92L182.579 226.096L106.16 207.043Z"/><path class="lit" pathLength="1" d="M219.725 77.8746L202.68 150.033L196.2 174.462L196.195 174.485L187.207 208.92L182.579 226.096L106.16 207.043Z"/><path class="lit" pathLength="1" d="M219.725 77.8746L106.16 207.043L182.579 226.096L187.207 208.92L196.195 174.485L196.2 174.462L202.68 150.033Z"/>
   <path class="amb" fill="#E39A0B" d="M186.84 233.342L204.5 166L225 170L256.5 176L296.635 183.597L160.693 338.218L186.84 233.342Z"/></svg></div>
  <p>Electrocity —<br>графік в один клік.</p>
+ <div class="prog" aria-hidden="true"><div class="bar"><i></i></div><span class="pct">0%</span></div>
 </div>
+<script>(function(){var d=4200,b=document.querySelector('#pre .bar i'),e=document.querySelector('#pre .pct');if(!b)return;
+function f(){var p=Math.min(1,performance.now()/d),q=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;b.style.transform='scaleX('+q+')';e.textContent=Math.round(q*100)+'%';if(p<1&&document.getElementById('pre'))requestAnimationFrame(f);}f();})();</script>
 <div id="app"><section class="stage" data-state="loading" style="min-height:100dvh"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""></section></div>
 <noscript>Для роботи застосунку увімкніть JavaScript.</noscript>
 <script type="module" src="js/app.js"></script>
