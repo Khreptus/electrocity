@@ -471,7 +471,7 @@ try {
 const pre = document.getElementById('pre');
 render().finally(() => {
   if (!pre) return;
-  setTimeout(() => { pre.classList.add('hide'); setTimeout(() => pre.remove(), 500); }, Math.max(0, 2500 - performance.now()));
+  setTimeout(() => { pre.classList.add('hide'); setTimeout(() => pre.remove(), 500); }, Math.max(0, 4300 - performance.now()));
 });
 
 // ---------- Підказки адреси ----------
