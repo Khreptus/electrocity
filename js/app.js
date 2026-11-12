@@ -52,6 +52,7 @@ async function render() {
   if (view === 'ob-city') initCity();
   if (view === 'ob-address') initAddress();
   if ((view === 'home' || view === 'detail') && cur()) addrStatus(cur());
+  if (['home', 'detail', 'addresses'].includes(view) || matchMedia('(min-width:1024px)').matches) refreshAddrs();
   document.title = view === 'home' && cur() ? `${cur().name} · Electrocity` : 'Electrocity — графік відключень';
 }
 
@@ -82,32 +83,38 @@ function overlaySegs(segs, items, d) {
   if (!hit) return null;
   return out.reduce((m, s) => { const l = m[m.length - 1]; if (l && l[2] === s[2] && l[1] === s[0]) l[1] = s[1]; else m.push(s); return m; }, []);
 }
-let shownOverlay = null;
-async function overlayScale(a, items) {
-  shownOverlay = null; if (!items.length) return;
-  const { date, min } = kyivNow(); const d = addDays(date, day); const isToday = day === 0;
-  const data = await loadSchedule(region(a.regionId).op);
-  const segs = overlaySegs(segmentsFor(data, d, a.queue), items, d); if (!segs) return;
-  shownOverlay = { id: a.id, d, segs };
-  const sc = document.querySelector('.sheet .scale:not(.compact)') || document.querySelector('.sheet .empty-day');
-  if (!sc) return;
-  sc.outerHTML = sc.classList.contains('empty-day') && view === 'detail' ? `<div class="card">${scaleHTML(segs, isToday ? min : null)}</div>` : scaleHTML(segs, isToday ? min : null);
-  const rows = [...document.querySelectorAll('.sheet .ev')];
-  const evs = view === 'detail' ? segs : isToday ? upcomingEvents(segs, min).slice(0, 3) : segs;
-  const html = evs.map(s => evRow(s, min, isToday)).join('');
-  if (rows.length) { rows[0].insertAdjacentHTML('beforebegin', html); rows.forEach(r => r.remove()); }
-  else document.querySelector('.sheet .scale:not(.compact)')?.insertAdjacentHTML('afterend', html);
+// Дані за адресою з кешу (синхронно) — щоб шкала одразу малювалась з аваріями, без мигання
+const addrKey = a => [region(a.regionId)?.op, a.city, a.street, a.house].join('|');
+const addrItemsCached = a => (addrCache[addrKey(a)]?.j?.items || []).filter(it => it.kind !== 'schedule');
+const withAddr = (a, segs, d) => overlaySegs(segs, addrItemsCached(a), d) || segs;
+const addrInflight = {};
+// Завантажити стан адреси (кеш 2 хв); повертає true, якщо дані змінилися
+function fetchAddr(a) {
+  const op = region(a.regionId)?.op;
+  if (!API_READY || !ADDR_OPS.has(op) || !a.street || !a.house) return Promise.resolve(false);
+  const key = addrKey(a), r = addrCache[key];
+  if (r && Date.now() - r.t < 120e3) return Promise.resolve(false);
+  return addrInflight[key] ||= (async () => {
+    try {
+      const q = new URLSearchParams({ op, city: a.city, street: a.street, house: a.house });
+      const j = await (await fetch(`${API}api/outage?${q}`)).json();
+      const changed = !r || JSON.stringify(r.j?.items || []) !== JSON.stringify(j?.items || []);
+      addrCache[key] = { t: Date.now(), j }; return changed;
+    } catch { return false; } finally { delete addrInflight[key]; }
+  })();
+}
+// Перевірити всі адреси у фоні й перемалювати, якщо щось змінилося
+let addrBusy = false;
+async function refreshAddrs() {
+  if (addrBusy) return; addrBusy = true;
+  try { const ch = await Promise.all(S.addresses.map(fetchAddr)); if (ch.some(Boolean) && !document.querySelector('.bsheet')) render(); }
+  finally { addrBusy = false; }
 }
 async function addrStatus(a) {
   const box = document.getElementById('addr-status'); if (!box) return;
   const op = region(a.regionId)?.op;
   if (!API_READY || !ADDR_OPS.has(op) || !a.street || !a.house) return;
-  const key = [op, a.city, a.street, a.house].join('|');
-  let r = addrCache[key];
-  if (!r || Date.now() - r.t > 120e3) {
-    try { const q = new URLSearchParams({ op, city: a.city, street: a.street, house: a.house });
-      r = { t: Date.now(), j: await (await fetch(`${API}api/outage?${q}`)).json() }; addrCache[key] = r; } catch { return; }
-  }
+  const r = addrCache[addrKey(a)]; if (!r) return;
   const j = r.j; if (!j?.ok || !j.supported || !document.contains(box)) return;
   const { date, min } = kyivNow(); const nowIso = `${date}T${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
   const items = (j.items || []).filter(it => it.kind !== 'schedule');
@@ -127,7 +134,6 @@ async function addrStatus(a) {
     const tm = hero.querySelector('.timer, .note');
     if (tm) tm.outerHTML = `<div class="note">${ic('clock')}${em.end ? `Орієнтовне відновлення о ${isoHM(em.end)}${em.end.slice(0, 10) !== date ? ' (' + isoDM(em.end) + ')' : ''}` : 'Час відновлення невідомий'}</div>`;
   }
-  await overlayScale(a, items);
   if (!items.length) { box.innerHTML = `<div class="addr-ok">${ic('shield')}<span>За вашою адресою аварій і планових робіт не зареєстровано<span class="t"> | ${checked}</span></span></div>`; return; }
   box.innerHTML = items.slice(0, view === 'detail' ? 20 : 3).map(it => {
     const now = active.includes(it); const em = it.kind === 'emergency';
@@ -229,7 +235,7 @@ async function home() {
   const h = heroInfo(data, a);
   const { date, min } = kyivNow();
   const d = addDays(date, day);
-  const segs = segmentsFor(data, d, a.queue);
+  const segs = withAddr(a, segmentsFor(data, d, a.queue), d);
   const isToday = day === 0;
   const tmr = segmentsFor(data, addDays(date, 1), a.queue);
   const evs = isToday ? upcomingEvents(segs, min).slice(0, 3) : (segs || []);
@@ -243,7 +249,7 @@ async function home() {
 async function detail() {
   const a = cur(); const data = await loadSchedule(region(a.regionId).op);
   const { date, min } = kyivNow(); const d = addDays(date, day); const isToday = day === 0;
-  const segs = segmentsFor(data, d, a.queue);
+  const segs = withAddr(a, segmentsFor(data, d, a.queue), d);
   const sum = st => (segs || []).filter(s => st.includes(s[2])).reduce((t, s) => t + s[1] - s[0], 0);
   const tile = (l, v, c) => `<div class="card" style="flex:1;gap:2px;padding:12px;border-radius:16px"><span class="cap">${l}</span><span class="h-s" style="color:var(--${c}-ink)">${v}</span></div>`;
   return `${band(`Графік · Черга ${esc(a.queue)}`, true)}<section class="sheet r32">
@@ -257,8 +263,9 @@ async function detail() {
 async function addrCard(a, compact) {
   const data = await loadSchedule(region(a.regionId).op);
   const { date, min } = kyivNow();
-  const segs = segmentsFor(data, date, a.queue); const s = stateAt(segs, min); const st = s ? s[2] : 'unknown';
-  const nc = nextChange(data, date, a.queue, min);
+  const base = segmentsFor(data, date, a.queue), segs = withAddr(a, base, date); const s = stateAt(segs, min); const st = s ? s[2] : 'unknown';
+  let nc = nextChange(data, date, a.queue, min);
+  if (segs !== base && s) { const off = x => ['off', 'emergency'].includes(x); const i = segs.indexOf(s); const n = segs.slice(i + 1).find(x => off(x[2]) !== off(st)); nc = n ? { at: n[0], state: n[2] } : null; }
   const next = nc ? `${['off', 'emergency'].includes(nc.state) ? 'Відключення' : 'Відновлення'} о ${hm(nc.at)}` : '';
   const icn = NAMES.find(n => n[1] === a.name)?.[0] || 'map-pin';
   return `<div class="acard ${a.id === cur()?.id ? 'sel' : ''}" data-act="pick" data-id="${a.id}" role="button" tabindex="0">
@@ -376,7 +383,7 @@ function toast(t) { document.querySelector('.toast')?.remove(); const d = docume
 async function segSheet(i) {
   const a = cur(); const data = await loadSchedule(region(a.regionId).op); const { date } = kyivNow();
   const d = addDays(date, day);
-  const list = shownOverlay && shownOverlay.id === a.id && shownOverlay.d === d ? shownOverlay.segs : segmentsFor(data, d, a.queue);
+  const list = withAddr(a, segmentsFor(data, d, a.queue), d);
   const s = list?.[i]; if (!s) return; const st = s[2];
   const title = st === 'on' && s[0] === 0 && s[1] === 1440 ? 'Без відключень' : { on: 'Світло є', off: 'Планове відключення', possible: 'Можливе відключення', unknown: 'Немає даних', emergency: 'Аварійне відключення' }[s[2]];
   openSheet(`<div style="display:flex;gap:12px;align-items:center"><span class="b ${s[2]}" style="width:44px;height:44px;border-radius:14px;display:grid;place-items:center">${ic(STATE_ICON[s[2]])}</span><div><div class="h-s" style="font-size:22px">${title}</div><div class="cap">${day ? 'Завтра' : 'Сьогодні'} · Черга ${esc(a.queue)}</div></div></div>
