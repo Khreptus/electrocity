@@ -12,32 +12,41 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Electrocity">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="preload" href="fonts/onest-cyrillic-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/lamp-off.webp" as="image">
 <link rel="stylesheet" href="css/app.css">
 <style>
-#pre{position:fixed;inset:0;z-index:100;background:#0F1012;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;padding:24px;transition:opacity .45s ease,visibility .45s;font-family:Onest,system-ui,sans-serif}
+/* Прелоадер «енергія по дроту»: провід опускається до блискавки, по ньому біжить іскра,
+   запалює контур від вершини в обидва боки, бурштинова частина спалахує. ~2.4 с */
+#pre{position:fixed;inset:0;z-index:100;background:#0F1012;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:40px;padding:24px;overflow:hidden;transition:opacity .45s ease,visibility .45s;font-family:Onest,system-ui,sans-serif}
 #pre.hide{opacity:0;visibility:hidden}
-#pre .ic{position:relative;width:148px;height:148px}
-#pre svg{width:100%;height:100%;overflow:visible}
-#pre .glow{position:absolute;inset:-60%;border-radius:50%;background:radial-gradient(circle,rgba(231,183,126,.55),rgba(227,154,11,.18) 35%,transparent 65%);opacity:0;animation:preGlow 4s ease forwards}
-#pre .a{transform-origin:50% 50%;animation:preA 4s cubic-bezier(.2,.9,.25,1) forwards}
-#pre .w{transform-origin:50% 50%;animation:preW 4s cubic-bezier(.2,.9,.25,1) forwards}
-#pre .bolt{animation:preFlick 4s linear forwards}
-#pre p{color:#F3F4F1;font-size:clamp(24px,6.4vw,30px);font-weight:700;line-height:1.25;letter-spacing:-.01em;text-align:center;max-width:none;opacity:0;transform:translateY(8px);animation:preText 4s ease forwards}
-@keyframes preA{0%{transform:translate(-70px,90px) rotate(-14deg);opacity:0}18%{opacity:1}36%{transform:translate(0,0) rotate(0)}100%{transform:none}}
-@keyframes preW{0%{transform:translate(70px,-90px) rotate(14deg);opacity:0}18%{opacity:1}36%{transform:translate(0,0) rotate(0)}40%{transform:translate(-3px,3px)}46%,100%{transform:none}}
-@keyframes preFlick{0%,36%{filter:brightness(.55)}40%{filter:brightness(1.6)}44%{filter:brightness(.6)}49%{filter:brightness(1.4)}53%{filter:brightness(.8)}60%,100%{filter:brightness(1)}}
-@keyframes preGlow{0%,38%{opacity:0;transform:scale(.6)}50%{opacity:1;transform:scale(1.05)}62%{opacity:.6}75%,100%{opacity:.75;transform:scale(1)}}
-@keyframes preText{0%,45%{opacity:0;transform:translateY(8px)}62%,100%{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){#pre .a,#pre .w,#pre .bolt{animation:none}#pre .glow{animation:none;opacity:.7}#pre p{animation:none;opacity:1;transform:none}}
+#pre .ic{position:relative;width:140px;height:189px}
+#pre svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+#pre .glow{position:absolute;left:50%;top:62%;width:260px;height:260px;margin:-130px 0 0 -130px;border-radius:50%;background:radial-gradient(circle,rgba(227,154,11,.42),rgba(227,154,11,.12) 40%,transparent 68%);opacity:0;animation:pGlow 2.4s ease forwards}
+#pre .wire{stroke:#2C2E33;stroke-width:3;stroke-dasharray:1 1;stroke-dashoffset:1;animation:pWire .5s cubic-bezier(.3,.7,.3,1) forwards}
+#pre .spark{stroke:#FFD48A;stroke-width:5;stroke-linecap:round;stroke-dasharray:.05 2;stroke-dashoffset:.05;opacity:0;filter:drop-shadow(0 0 6px #E39A0B) drop-shadow(0 0 14px rgba(227,154,11,.8));animation:pSpark .6s cubic-bezier(.55,0,.85,.4) .35s forwards}
+#pre .dim{stroke:#2C2E33;stroke-width:7;stroke-miterlimit:16}
+#pre .lit{stroke:#fff;stroke-width:7;stroke-miterlimit:16;stroke-dasharray:.5 1;stroke-dashoffset:.5;filter:drop-shadow(0 0 4px rgba(255,214,140,.9));animation:pTrace .55s cubic-bezier(.4,0,.2,1) .9s forwards}
+#pre .amb{opacity:0;animation:pIgnite .6s linear 1.4s forwards}
+#pre p{color:#F3F4F1;font-size:clamp(24px,6.4vw,30px);font-weight:700;line-height:1.25;letter-spacing:-.01em;text-align:center;opacity:0;transform:translateY(8px);animation:pText .5s ease 1.75s forwards}
+@keyframes pWire{to{stroke-dashoffset:0}}
+@keyframes pSpark{0%{opacity:1;stroke-dashoffset:.05}92%{opacity:1}100%{opacity:0;stroke-dashoffset:-.985}}
+@keyframes pTrace{to{stroke-dashoffset:0;filter:drop-shadow(0 0 0 transparent)}}
+@keyframes pIgnite{0%{opacity:0}12%{opacity:1}22%{opacity:.25}34%{opacity:1}44%{opacity:.55}60%,100%{opacity:1}}
+@keyframes pGlow{0%,60%{opacity:0;transform:scale(.6)}75%{opacity:1;transform:scale(1.08)}100%{opacity:.8;transform:scale(1)}}
+@keyframes pText{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#pre *{animation:none!important}#pre .wire,#pre .lit{stroke-dashoffset:0}#pre .amb,#pre p{opacity:1;transform:none}#pre .glow{opacity:.8}}
 </style>
 </head>
 <body>
 <div id="pre" role="status" aria-label="Завантаження">
- <div class="ic"><div class="glow"></div><svg viewBox="90 50 212 294" aria-hidden="true"><g class="bolt"><path class="a" fill="#E39A0B" d="M186.355 233.221L98.3342 211.276C96.9085 210.92 96.1956 210.743 96.0282 210.206C95.8607 209.67 96.3458 209.118 97.316 208.015L229.732 57.4057C230.271 56.7923 230.54 56.4857 230.715 56.5769C230.889 56.6681 230.79 57.0643 230.592 57.8568L205.064 160.251C205.006 160.48 204.978 160.594 205.031 160.683C205.085 160.772 205.199 160.8 205.428 160.857L293.449 182.802C294.875 183.158 295.587 183.336 295.755 183.872C295.922 184.408 295.437 184.96 294.467 186.064L162.051 336.673C161.512 337.286 161.243 337.593 161.069 337.501C160.894 337.41 160.993 337.014 161.191 336.221L186.72 233.827C186.777 233.599 186.805 233.484 186.752 233.395C186.698 233.307 186.584 233.278 186.355 233.221Z"/><path class="w" fill="#F3F4F1" d="M186.026 233.139L98.3342 211.276C96.9085 210.92 96.1956 210.743 96.0282 210.206C95.8607 209.67 96.3458 209.118 97.316 208.015L229.732 57.4057L229.732 57.4056C230.271 56.7923 230.54 56.4857 230.715 56.5769C230.889 56.6681 230.79 57.0643 230.592 57.8568L205.064 160.251C205.006 160.48 204.978 160.594 205.031 160.683C205.085 160.772 205.199 160.8 205.428 160.857L280.83 179.656C286.671 181.113 289.591 181.841 289.484 182.719C289.376 183.597 286.366 183.597 280.347 183.597L280.346 183.597L174.645 183.597C174.349 183.597 174.2 183.597 174.125 183.694C174.05 183.791 174.087 183.934 174.161 184.222L186.631 232.529C186.724 232.892 186.771 233.073 186.671 233.174C186.571 233.275 186.389 233.23 186.026 233.139Z"/></g></svg></div>
+ <div class="ic"><div class="glow"></div><svg viewBox="92 62 210 284" aria-hidden="true" fill="none">
+  <path class="wire" pathLength="1" d="M224.21 -900V68.99"/><path class="spark" pathLength="1" d="M224.21 -900V68.99"/>
+  <path class="dim" d="M224.21 68.9858L200.702 163.275L204.085 164.13L267.337 180.097L174 180.097L169.482 180.097L170.611 184.472L181.982 228.523L101.571 208.475Z"/><path class="lit" pathLength="1" d="M224.21 68.9858L200.702 163.275L204.085 164.13L267.337 180.097L174 180.097L169.482 180.097L170.611 184.472L181.982 228.523L101.571 208.475Z"/><path class="lit" pathLength="1" d="M224.21 68.9858L101.571 208.475L181.982 228.523L170.611 184.472L169.482 180.097L174 180.097L267.337 180.097L204.085 164.13L200.702 163.275Z"/>
+  <path class="amb" fill="#E39A0B" d="M186.84 233.342L174 183.597L219.5 183.597L248 183.596L296.635 183.596L160.693 338.217L186.84 233.342Z"/></svg></div>
  <p>Electrocity —<br>графік в один клік.</p>
 </div>
 <div id="app"><section class="stage" data-state="loading" style="min-height:100dvh"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""></section></div>
