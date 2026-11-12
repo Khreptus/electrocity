@@ -23,9 +23,9 @@ export function parseHoeEvents(html, kind, rem) {
   const rows = html.split(/<tr[\s>]/i).slice(1);
   const out = []; let cur = null;
   for (const r of rows) {
-    const cells = r.split(/<td[\s>]/i).slice(1);
+    const cells = r.split(/<td\b[^>]*>/i).slice(1);
     if (cells.length >= 5) { // рядок події
-      const c = cells.map(x => strip('<x ' + x));
+      const c = cells.map(x => strip(x));
       cur = { kind, rem, place: c[0].replace(/Показати вулиці/g, '').trim(), work: c[1], created: c[2], start: isoKyiv(c[3]), end: isoKyiv(c[4]), streets: {} };
       out.push(cur);
     } else if (cur && cells.length === 1) { // рядок з вулицями
