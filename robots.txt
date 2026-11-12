@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://electrocity.slv463991.workers.dev/sitemap.xml
+Host: electrocity.slv463991.workers.dev
