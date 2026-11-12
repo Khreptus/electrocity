@@ -26,35 +26,53 @@
   <p style="color:var(--stage-text-2);margin-top:10px">Статус, таймер до відключення і шкала доби — на головному екрані. Безкоштовно, через застосунок Scriptable.</p>
  </section>
  <section class="sheet" style="gap:16px">
-  <div class="card">
-   <div class="h-s">Ваша адреса</div>
-   <label class="field sel"><span class="cap3" style="width:96px">Область</span><select id="op">
-    <option value="dtek-oem">Одеська</option><option value="dtek-dnem">Дніпропетровська (Дніпро, Кривий Ріг)</option><option value="hoe">Хмельницька</option><option value="moe">Миколаївська</option></select></label>
-   <label class="field sel"><span class="cap3" style="width:96px">Черга</span><select id="q"></select></label>
-   <label class="field"><span class="cap3" style="width:96px">Назва</span><input id="n" value="Дім" maxlength="14"></label>
-   <div class="cap">Параметр віджета: <code id="param">dtek-oem|3.2|Дім</code></div>
+  <div class="card" id="addrcard">
+   <div class="h-s">Адреса для віджета</div>
+   <div id="mine" class="list" style="background:var(--surface-2)"></div>
+   <div id="manual" hidden>
+    <label class="field sel"><span class="cap3" style="width:96px">Область</span><select id="op"></select></label>
+    <label class="field sel"><span class="cap3" style="width:96px">Черга</span><select id="q"></select></label>
+    <label class="field"><span class="cap3" style="width:96px">Назва</span><input id="n" value="Дім" maxlength="14"></label>
+   </div>
+   <div class="cap" id="hint"></div>
   </div>
   <ol>
    <li><div>Встановіть безкоштовний застосунок <a class="link" href="https://apps.apple.com/app/scriptable/id1405459188">Scriptable</a> з App Store.</div></li>
    <li><div style="display:flex;flex-direction:column;gap:10px;flex:1">Скопіюйте код віджета.<button class="btn primary" id="copy">Скопіювати код</button></div></li>
    <li><div>У Scriptable натисніть <b>+</b>, вставте код, назвіть скрипт <b>Electrocity</b>.</div></li>
    <li><div>На головному екрані: утримуйте палець → <b>+</b> → Scriptable → оберіть середній розмір → <b>Додати</b>.</div></li>
-   <li><div style="flex:1">Утримуйте віджет → <b>Редагувати віджет</b>: Script — <b>Electrocity</b>, Parameter — <button class="link" id="copyp">скопіювати параметр</button> і вставити.</div></li>
+   <li><div style="flex:1">Утримуйте віджет → <b>Редагувати віджет</b> → Script — <b>Electrocity</b>. Parameter залиште порожнім: адресу вже вписано в код.</div></li>
   </ol>
   <div class="banner info"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg><div><div class="bt">Як часто оновлюється</div><div class="bb">Таймер іде щосекунди, а дані графіка iOS оновлює приблизно раз на 15 хв і в момент зміни статусу. Статус — за опублікованим графіком.</div></div></div>
   <a class="btn secondary" href="../">Відкрити застосунок</a>
  </section>
 </main>
-<script>
-const Q={'dtek-oem':1,'dtek-dnem':1,'hoe':1,'moe':1};
-const $=id=>document.getElementById(id);
-function fillQ(){const v=$('q').value||'3.2';$('q').innerHTML='';for(let g=1;g<=6;g++)for(const s of [1,2]){const o=new Option(`${g}.${s}`,`${g}.${s}`);$('q').add(o)}$('q').value=v;upd()}
-function upd(){$('param').textContent=`${$('op').value}|${$('q').value}|${$('n').value.trim()||'Дім'}`}
-['op','q','n'].forEach(id=>$(id).addEventListener('input',upd));fillQ();
-async function copy(text,btn,label){try{await navigator.clipboard.writeText(text)}catch{const t=document.createElement('textarea');t.value=text;document.body.append(t);t.select();document.execCommand('copy');t.remove()}const old=btn.textContent;btn.textContent=label;btn.classList.add('copied');setTimeout(()=>{btn.textContent=old;btn.classList.remove('copied')},1800)}
-let CODE='';fetch('svitlo.js',{cache:'no-store'}).then(r=>r.text()).then(t=>CODE=t);
-$('copy').onclick=e=>{if(!CODE)return;copy(CODE,e.target,'Скопійовано ✓')};
-$('copyp').onclick=e=>copy($('param').textContent,e.target,'скопійовано ✓');
+<script type="module">
+import { REGIONS, region, queueList } from '../js/data.js';
+const $ = id => document.getElementById(id);
+let S = {}; try { S = JSON.parse(localStorage.getItem('svitlo.v1')) || {}; } catch {}
+const mine = (S.addresses || []).filter(a => region(a.regionId) && a.queue);
+let sel = mine.find(a => a.id === S.currentId) || mine.find(a => a.id === S.primaryId) || mine[0] || null;
+const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// ручний вибір — для тих, хто ще не додав адресу в застосунку
+$('op').innerHTML = REGIONS.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+const fillQ = () => { const r = region($('op').value), v = $('q').value; $('q').innerHTML = queueList(r.queues).map(q => `<option>${q}</option>`).join(''); if (v) $('q').value = v; };
+$('op').value = REGIONS.find(r => r.op === 'hoe')?.id || REGIONS[0].id; fillQ();
+$('op').addEventListener('input', fillQ);
+function renderMine() {
+  if (!mine.length) { $('mine').hidden = true; $('manual').hidden = false; $('hint').textContent = 'Додайте адресу в застосунку Electrocity — тоді віджет покаже аварії саме за вашим будинком.'; return; }
+  $('mine').innerHTML = mine.map(a => `<button class="li" data-id="${a.id}" style="text-align:left"><span class="tx"><span class="tt">${esc(a.name)} · черга ${esc(a.queue)}</span><br><span class="cap">${esc([a.city, a.street, a.house].filter(Boolean).join(', '))}</span></span><span style="margin-left:auto;font-size:20px;color:var(--light)">${sel && sel.id === a.id ? '●' : '○'}</span></button>`).join('');
+  $('hint').textContent = 'Адресу взято з вашого застосунку. Віджет покаже графік черги та аварії за цим будинком.';
+}
+$('mine').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; sel = mine.find(a => a.id === b.dataset.id); renderMine(); });
+renderMine();
+function preset() {
+  if (sel) { const r = region(sel.regionId); return { op: r.op, queue: sel.queue, name: (sel.name || 'Дім').slice(0, 14), city: sel.city || '', street: sel.street || '', house: sel.house || '' }; }
+  return { op: region($('op').value).op, queue: $('q').value, name: ($('n').value.trim() || 'Дім').slice(0, 14) };
+}
+async function copy(text, btn, label) { try { await navigator.clipboard.writeText(text); } catch { const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); } const old = btn.textContent; btn.textContent = label; setTimeout(() => btn.textContent = old, 1800); }
+let CODE = ''; fetch('svitlo.js', { cache: 'no-store' }).then(r => r.text()).then(t => CODE = t);
+$('copy').onclick = e => { if (!CODE) return; copy(CODE.replace('const PRESET = null;', `const PRESET = ${JSON.stringify(preset())};`), e.target, 'Скопійовано ✓'); };
 </script>
 </body>
 </html>

@@ -1,10 +1,15 @@
 // Electrocity — віджет для iPhone (застосунок Scriptable, безкоштовний)
-// Параметр віджета: оператор|черга|назва   напр.:  dtek-oem|3.2|Дім
-// Оператори: dtek-oem (Одеська) · dtek-dnem (Дніпро, Кривий Ріг) · hoe (Хмельницька) · moe (Миколаївська)
-// Статус — за опублікованим графіком оператора, а не фактична наявність світла.
+// Адресу вписує сторінка віджета з вашого застосунку Electrocity (PRESET нижче).
+// Необов'язковий параметр віджета перекриває її: оператор|черга|назва, напр.:  hoe|1.1|Дім
+// Статус — за графіком оператора; аварійні й планові відключення за адресою — з сайтів обленерго.
 
 const BASE = 'https://electrocity.slv463991.workers.dev/';
-const [OP, QUEUE, NAME] = ((args.widgetParameter || 'dtek-oem|3.2|Дім').split('|')).map(s => s.trim());
+const PRESET = null; // ← адреса з застосунку
+const PARAM = (args.widgetParameter || '').trim();
+const P = PARAM ? (([op, queue, name]) => ({ op, queue, name }))(PARAM.split('|').map(s => s.trim()))
+  : (PRESET || { op: 'dtek-oem', queue: '3.2', name: 'Дім' });
+const OP = P.op, QUEUE = P.queue, NAME = P.name || 'Дім';
+const ADDR_OPS = ['hoe', 'dtek-oem', 'moe'];
 const C = {
   bg: new Color('#1B1B1B'), text: new Color('#F3F4F1'), text2: new Color('#9A9B99'), text3: new Color('#6B7078'),
   light: new Color('#E7B77E'), dim: new Color('#8A8E95'), alert: new Color('#FF6B7A'),
@@ -37,14 +42,39 @@ async function load() {
     return { data: null, cached: false };
   }
 }
+// аварійні й планові відключення саме за цією адресою
+async function loadAddr() {
+  if (PARAM || !P.street || !P.house || !ADDR_OPS.includes(OP)) return [];
+  try {
+    const q = Object.entries({ op: OP, city: P.city || '', street: P.street, house: P.house }).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+    const r = new Request(`${BASE}api/outage?${q}`); r.timeoutInterval = 12; const j = await r.loadJSON();
+    return (j?.items || []).filter(it => it.kind !== 'schedule');
+  } catch { return []; }
+}
+const isoMin = iso => +iso.slice(11, 13) * 60 + +iso.slice(14, 16);
+function overlay(segs, items, d) {
+  if (!items.length) return segs;
+  let out = (segs || [[0, 1440, 'unknown']]).map(x => [...x]); let hit = false;
+  for (const it of items) {
+    const sd = it.start ? it.start.slice(0, 10) : null, ed = it.end ? it.end.slice(0, 10) : null;
+    if ((sd && sd > d) || (ed && ed < d)) continue;
+    const a = !sd || sd < d ? 0 : isoMin(it.start), b = !ed || ed > d ? 1440 : isoMin(it.end); if (a >= b) continue; hit = true;
+    const st = it.kind === 'emergency' ? 'emergency' : 'off', nx = [];
+    for (const x of out) { if (x[0] < a) nx.push([x[0], Math.min(x[1], a), x[2]]); if (x[1] > b) nx.push([Math.max(x[0], b), x[1], x[2]]); }
+    nx.push([a, b, st]); out = nx.filter(x => x[1] > x[0]).sort((x, y) => x[0] - y[0]);
+  }
+  return hit ? out : segs;
+}
+
 async function img(name) {
   const fm = FileManager.local(); const p = fm.joinPath(fm.cacheDirectory(), `svitlo-${name}.png`);
   if (fm.fileExists(p)) return fm.readImage(p);
   try { const i = await new Request(`${BASE}widget/${name}.png`).loadImage(); fm.writeImage(p, i); return i; } catch { return null; }
 }
 
-function analyse(data) {
-  const now = kyiv(); const today = data?.days?.[now.date]?.[QUEUE]; const tom = data?.days?.[addDays(now.date, 1)]?.[QUEUE];
+function analyse(data, items = []) {
+  const now = kyiv(); const tm = addDays(now.date, 1);
+  const today = overlay(data?.days?.[now.date]?.[QUEUE], items, now.date), tom = overlay(data?.days?.[tm]?.[QUEUE], items, tm);
   if (!today) return { state: 'unknown', now, today, tom };
   const cur = today.find(s => now.min >= s[0] && now.min < s[1]);
   if (!cur) return { state: 'unknown', now, today, tom };
@@ -75,8 +105,8 @@ function scaleImage(segs, nowMin, w, h) {
 // ---------- віджет ----------
 const TITLE = { on: 'Світло є', off: 'Світла немає', possible: 'Можливе відкл.', emergency: 'Аварія', unknown: 'Невідомо' };
 async function build() {
-  const { data, cached } = await load();
-  const a = analyse(data);
+  const [{ data, cached }, items] = await Promise.all([load(), loadAddr()]);
+  const a = analyse(data, items);
   const fam = config.widgetFamily || 'medium';
   const w = new ListWidget(); w.backgroundColor = C.bg; w.url = BASE; w.setPadding(14, 14, 12, 14);
   const lamp = await img(a.state === 'on' ? 'lamp-on' : 'lamp-off');
@@ -103,7 +133,7 @@ async function build() {
   const ft = w.addStack();
   const f1 = ft.addText(a.nextDate ? `${isOff(a.state) ? 'світло о' : 'відкл. о'} ${hm(a.next)}` : ''); f1.font = Font.mediumMonospacedSystemFont(10); f1.textColor = C.text2;
   ft.addSpacer();
-  const f2 = ft.addText(data?.demo ? 'демо' : cached ? 'офлайн' : 'за графіком'); f2.font = Font.mediumSystemFont(10); f2.textColor = C.text3;
+  const f2 = ft.addText(a.state === 'emergency' ? 'за адресою' : data?.demo ? 'демо' : cached ? 'офлайн' : 'за графіком'); f2.font = Font.mediumSystemFont(10); f2.textColor = C.text3;
 
   // оновлення: на момент зміни статусу або через 15 хв
   const in15 = new Date(Date.now() + 15 * 60000);
