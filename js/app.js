@@ -197,10 +197,10 @@ async function home() {
   const evs = isToday ? upcomingEvents(segs, min).slice(0, 3) : (segs || []);
   const scaleBlock = segs ? scaleHTML(segs, isToday ? min : null) :
     `<div class="empty-day">${ic('calendar')}<div class="h-s" style="font-size:16px">Графік на ${isToday ? 'сьогодні' : 'завтра'} ще не опубліковано</div><div class="body-s">Зазвичай оператор публікує його ввечері.</div></div>`;
-  return stage(a, h) + `<section class="sheet">${banners(data)}<div id="addr-status"></div>
+  return stage(a, h) + `<section class="sheet">${banners(data)}
    <div class="card"><div class="row-head"><div class="h-s">Графік на ${isToday ? 'сьогодні' : 'завтра'}</div><button class="link" data-go="detail">Детальніше ${ic('chevron-right')}</button></div>
    <div class="seg" role="group"><button data-day="0" aria-pressed="${isToday}">Сьогодні</button><button data-day="1" aria-pressed="${!isToday}" ${tmr ? '' : ''}>Завтра</button></div>
-   ${scaleBlock}${evs.map(s => evRow(s, min, isToday)).join('')}${sourceLine(data, a)}</div></section>`;
+   <div id="addr-status"></div>${scaleBlock}${evs.map(s => evRow(s, min, isToday)).join('')}${sourceLine(data, a)}</div></section>`;
 }
 async function detail() {
   const a = cur(); const data = await loadSchedule(region(a.regionId).op);
