@@ -122,9 +122,21 @@ function merge(segs) {
 }
 
 // ---------- Аналіз ----------
-export function segmentsFor(data, date, queue) {
-  return data?.days?.[date]?.[queue] || null;
+// Дані свіжі й справжні (не демо): тоді відсутність графіка на сьогодні = відключень не застосовують.
+export function isFresh(data) {
+  if (!data || data.demo) return false;
+  if (data.live) return true;
+  const t = Math.max(Date.parse(data.updatedAt || 0) || 0, Date.parse(data.checkedAt || 0) || 0);
+  return t > 0 && Date.now() - t < 6 * 3600e3;
 }
+export function segmentsFor(data, date, queue) {
+  const segs = data?.days?.[date]?.[queue];
+  if (segs) return segs;
+  if (date === kyivNow().date && isFresh(data)) { const none = [[0, 1440, 'on']]; none.none = true; return none; }
+  return null;
+}
+// Увесь день без відключень (опублікований «порожній» графік або графіків не застосовують)
+export const freeDay = segs => !!segs && segs.length > 0 && segs.every(s => s[2] === 'on');
 export function stateAt(segs, min) {
   if (!segs) return null;
   return segs.find(s => min >= s[0] && min < s[1]) || null;

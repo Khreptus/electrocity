@@ -2,7 +2,7 @@ import { setLang, LANGS, detectLang, locale, tr } from './i18n.js';
 import { ic, STATE_ICON } from './icons.js';
 import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, skel } from './address.js';
 import { API, API_READY } from './config.js';
-import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr } from './data.js';
+import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr, freeDay } from './data.js';
 
 // ---------- Стан ----------
 const KEY = 'svitlo.v1';
@@ -125,6 +125,11 @@ function heroInfo(data, a) {
   const nc = nextChange(data, date, a.queue, min);
   const q = 'Черга ' + a.queue;
   const base = { state: st, nc, min };
+  if (st === 'on' && freeDay(segs)) {
+    const sub = `${q} · ${segs.none ? 'графіків відключень не застосовують' : 'на сьогодні відключень не заплановано'}`;
+    const note = nc ? `Наступне відключення — завтра о ${hm(nc.at - 1440)}` : 'Світло за графіком до кінця доби';
+    return { ...base, nc: null, title: 'Відключень немає', sub, note, srcTxt: segs.none ? 'За даними обленерго' : null };
+  }
   if (st === 'on') return { ...base, title: 'Світло є', sub: `${q} · з ${hm(s[0])} до ${hmEnd(s[1])}`, tl: 'До відключення', nl: 'Відключення о' };
   if (st === 'off') return { ...base, title: 'Світла немає', sub: `Планове відключення · ${q}`, tl: 'До відновлення', nl: 'Відновлення о' };
   if (st === 'possible') return { ...base, title: 'Можливе відключення', sub: `${q} · ${hm(s[0])}–${hmEnd(s[1])} · попередньо`, tl: 'До відключення', nl: 'Відключення о' };
@@ -140,7 +145,7 @@ function stage(a, h, loading) {
   else {
     const timer = h.nc ? `<div class="timer"><div><div class="lbl">${h.tl}</div><div class="big" data-countdown="${h.nc.at}">${cd(h.nc.at - h.min)}</div></div><div><div class="lbl" style="text-align:right">${h.nl}</div><div class="nx">${hm(h.nc.at)}</div></div></div>`
       : `<div class="note">${ic('clock')}${h.note || 'Час наступної зміни невідомий'}</div>`;
-    body = `<div class="hero st-${h.state}"><div class="src"><span class="badge" style="background:${badgeBg}">${ic(STATE_ICON[h.state] || 'help')}</span>За опублікованим графіком</div><h1>${h.title}</h1><div class="sub">${esc(h.sub)}</div>${timer}</div>`;
+    body = `<div class="hero st-${h.state}"><div class="src"><span class="badge" style="background:${badgeBg}">${ic(STATE_ICON[h.state] || 'help')}</span>${h.srcTxt || 'За опублікованим графіком'}</div><h1>${h.title}</h1><div class="sub">${esc(h.sub)}</div>${timer}</div>`;
   }
   return `<section class="stage" data-state="${lampState}"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""><img class="lamp on" src="assets/lamp-on.webp" alt=""><div class="beam" aria-hidden="true"><i></i></div>
    <button class="loc" data-act="switcher"><span class="tile">${ic(NAMES.find(n => n[1] === a.name)?.[0] || 'home')}</span><span class="txt"><span class="name">${esc(a.name)} ${ic('chevron-down')}</span><span class="addr">${esc(a.street ? `${a.street}${a.house ? ', ' + a.house : ''}` : (a.city || region(a.regionId)?.name))}</span></span><span class="tile round" data-act="notif" role="button" aria-label="Сповіщення">${ic('bell')}</span></button>
@@ -167,7 +172,7 @@ function scaleHTML(segs, nowMin, opts = {}) {
 }
 function evRow(s, min, isToday) {
   const st = s[2];
-  const title = { on: 'Світло є', off: 'Відключення', possible: 'Можливе відключення', unknown: 'Немає даних', emergency: 'Аварійне відключення' }[st];
+  const title = st === 'on' && s[0] === 0 && s[1] === 1440 ? 'Без відключень' : { on: 'Світло є', off: 'Відключення', possible: 'Можливе відключення', unknown: 'Немає даних', emergency: 'Аварійне відключення' }[st];
   const now = isToday && min >= s[0] && min < s[1];
   const rel = !isToday ? '' : now ? `ще ${dur(s[1] - min)}` : s[0] > min ? `через ${dur(s[0] - min)}` : '';
   return `<div class="ev ${isToday && s[1] <= min ? 'past' : ''}"><span class="t">${hm(s[0])}</span><span class="b ${st}">${ic(STATE_ICON[st])}</span><span class="tx"><span class="tt">${title}${now ? ' · зараз' : ''}</span><br><span class="d">${hm(s[0])} – ${hmEnd(s[1])} · ${dur(s[1] - s[0])}</span></span><span class="r">${rel}</span></div>`;
@@ -338,7 +343,7 @@ function toast(t) { document.querySelector('.toast')?.remove(); const d = docume
 async function segSheet(i) {
   const a = cur(); const data = await loadSchedule(region(a.regionId).op); const { date } = kyivNow();
   const s = segmentsFor(data, addDays(date, day), a.queue)[i]; if (!s) return;
-  const title = { on: 'Світло є', off: 'Планове відключення', possible: 'Можливе відключення', unknown: 'Немає даних', emergency: 'Аварійне відключення' }[s[2]];
+  const title = st === 'on' && s[0] === 0 && s[1] === 1440 ? 'Без відключень' : { on: 'Світло є', off: 'Планове відключення', possible: 'Можливе відключення', unknown: 'Немає даних', emergency: 'Аварійне відключення' }[s[2]];
   openSheet(`<div style="display:flex;gap:12px;align-items:center"><span class="b ${s[2]}" style="width:44px;height:44px;border-radius:14px;display:grid;place-items:center">${ic(STATE_ICON[s[2]])}</span><div><div class="h-s" style="font-size:22px">${title}</div><div class="cap">${day ? 'Завтра' : 'Сьогодні'} · Черга ${esc(a.queue)}</div></div></div>
    <div class="times"><div><div class="cap3">Початок</div><div class="mono" style="font-size:20px;font-weight:600">${hm(s[0])}</div></div><div><div class="cap3">Кінець</div><div class="mono" style="font-size:20px;font-weight:600">${hmEnd(s[1])}</div></div><div><div class="cap3">Тривалість</div><div style="font-weight:500;margin-top:2px">${dur(s[1] - s[0])}</div></div></div>
    ${sourceLine(data, a)}<button class="btn secondary" data-act="close">Закрити</button>`);
