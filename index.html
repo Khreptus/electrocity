@@ -28,8 +28,8 @@
 #pre .glow{position:absolute;left:50%;top:62%;width:260px;height:260px;margin:-130px 0 0 -130px;border-radius:50%;background:radial-gradient(circle,rgba(227,154,11,.42),rgba(227,154,11,.12) 40%,transparent 68%);opacity:0;animation:pGlow 2.4s ease forwards}
 #pre .wire{stroke:#2C2E33;stroke-width:3;stroke-dasharray:1 1;stroke-dashoffset:1;animation:pWire .5s cubic-bezier(.3,.7,.3,1) forwards}
 #pre .spark{stroke:#FFD48A;stroke-width:5;stroke-linecap:round;stroke-dasharray:.05 2;stroke-dashoffset:.05;opacity:0;filter:drop-shadow(0 0 6px #E39A0B) drop-shadow(0 0 14px rgba(227,154,11,.8));animation:pSpark .6s cubic-bezier(.55,0,.85,.4) .35s forwards}
-#pre .dim{stroke:#2C2E33;stroke-width:7;stroke-miterlimit:16}
-#pre .lit{stroke:#fff;stroke-width:7;stroke-miterlimit:16;stroke-dasharray:.5 1;stroke-dashoffset:.5;filter:drop-shadow(0 0 4px rgba(255,214,140,.9));animation:pTrace .55s cubic-bezier(.4,0,.2,1) .9s forwards}
+#pre .dim{stroke:#2C2E33;stroke-width:12;stroke-miterlimit:16}
+#pre .lit{stroke:#fff;stroke-width:12;stroke-miterlimit:16;stroke-dasharray:.5 1;stroke-dashoffset:.5;filter:drop-shadow(0 0 4px rgba(255,214,140,.9));animation:pTrace .55s cubic-bezier(.4,0,.2,1) .9s forwards}
 #pre .amb{opacity:0;animation:pIgnite .6s linear 1.4s forwards}
 #pre p{color:#F3F4F1;font-size:clamp(24px,6.4vw,30px);font-weight:700;line-height:1.25;letter-spacing:-.01em;text-align:center;opacity:0;transform:translateY(8px);animation:pText .5s ease 1.75s forwards}
 @keyframes pWire{to{stroke-dashoffset:0}}
@@ -44,9 +44,9 @@
 <body>
 <div id="pre" role="status" aria-label="Завантаження">
  <div class="ic"><div class="glow"></div><svg viewBox="92 62 210 284" aria-hidden="true" fill="none">
-  <path class="wire" pathLength="1" d="M224.21 -900V68.99"/><path class="spark" pathLength="1" d="M224.21 -900V68.99"/>
-  <path class="dim" d="M224.21 68.9858L200.702 163.275L204.085 164.13L267.337 180.097L174 180.097L169.482 180.097L170.611 184.472L181.982 228.523L101.571 208.475Z"/><path class="lit" pathLength="1" d="M224.21 68.9858L200.702 163.275L204.085 164.13L267.337 180.097L174 180.097L169.482 180.097L170.611 184.472L181.982 228.523L101.571 208.475Z"/><path class="lit" pathLength="1" d="M224.21 68.9858L101.571 208.475L181.982 228.523L170.611 184.472L169.482 180.097L174 180.097L267.337 180.097L204.085 164.13L200.702 163.275Z"/>
-  <path class="amb" fill="#E39A0B" d="M186.84 233.342L174 183.597L219.5 183.597L248 183.596L296.635 183.596L160.693 338.217L186.84 233.342Z"/></svg></div>
+  <path class="wire" pathLength="1" d="M219.725 -900V77.87"/><path class="spark" pathLength="1" d="M219.725 -900V77.87"/>
+  <path class="dim" d="M219.725 77.8746L202.68 150.033L196.2 174.462L196.195 174.485L187.207 208.92L182.579 226.096L106.16 207.043Z"/><path class="lit" pathLength="1" d="M219.725 77.8746L202.68 150.033L196.2 174.462L196.195 174.485L187.207 208.92L182.579 226.096L106.16 207.043Z"/><path class="lit" pathLength="1" d="M219.725 77.8746L106.16 207.043L182.579 226.096L187.207 208.92L196.195 174.485L196.2 174.462L202.68 150.033Z"/>
+  <path class="amb" fill="#E39A0B" d="M186.84 233.342L204.5 166L225 170L256.5 176L296.635 183.597L160.693 338.218L186.84 233.342Z"/></svg></div>
  <p>Electrocity —<br>графік в один клік.</p>
 </div>
 <div id="app"><section class="stage" data-state="loading" style="min-height:100dvh"><div class="glow"></div><img class="lamp off" src="assets/lamp-off.webp" alt=""></section></div>
