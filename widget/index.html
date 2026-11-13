@@ -74,5 +74,6 @@ async function copy(text, btn, label) { try { await navigator.clipboard.writeTex
 let CODE = ''; fetch('svitlo.js', { cache: 'no-store' }).then(r => r.text()).then(t => CODE = t);
 $('copy').onclick = e => { if (!CODE) return; copy(CODE.replace('const PRESET = null;', `const PRESET = ${JSON.stringify(preset())};`), e.target, 'Скопійовано ✓'); };
 </script>
+<!-- Cloudflare Web Analytics (без cookies) --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b0eb46c97b514168bda33164441c81d8"}'></script>
 </body>
 </html>

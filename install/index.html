@@ -175,5 +175,6 @@ $('installBtn').onclick = async () => {
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(() => {});
 </script>
 <script type="module">import { setLang, detectLang } from '../js/i18n.js'; let l; try { l = JSON.parse(localStorage.getItem('svitlo.v1') || '{}').lang; } catch {} setLang(new URLSearchParams(location.search).get('lang') || l || detectLang());</script>
+<!-- Cloudflare Web Analytics (без cookies) --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b0eb46c97b514168bda33164441c81d8"}'></script>
 </body>
 </html>
