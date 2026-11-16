@@ -305,3 +305,6 @@ a.btn,a.li{text-decoration:none;color:inherit}a.btn.primary{color:var(--inverse-
 .ptr.ready{color:var(--light, #E7B77E)}
 .ptr.spin .i{animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* без смуги прокрутки — прокрутка лишається */
+html,body,*{scrollbar-width:none;-ms-overflow-style:none}
+html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none;width:0;height:0;background:transparent}
