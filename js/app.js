@@ -243,7 +243,7 @@ async function home() {
   const tmr = segmentsFor(data, addDays(date, 1), a.queue);
   const evs = isToday ? upcomingEvents(segs, min).slice(0, 3) : (segs || []);
   const scaleBlock = segs ? scaleHTML(segs, isToday ? min : null) :
-    `<div class="empty-day">${ic('calendar')}<div class="h-s" style="font-size:16px">Графік на ${isToday ? 'сьогодні' : 'завтра'} ще не опубліковано</div><div class="body-s">Зазвичай оператор публікує його ввечері.</div></div>`;
+    `<div class="empty-day">${ic('calendar')}<div class="h-s" style="font-size:16px">Графік на ${isToday ? 'сьогодні' : 'завтра'} ще не опубліковано</div><div class="body-s">Зазвичай оператор публікує його ввечері.</div></div><button class="btn secondary recheck" data-act="recheck">${ic('refresh')}Перевірити</button>`;
   return stage(a, h) + `<section class="sheet">${banners(data)}
    <div class="card"><div class="row-head"><div class="h-s">Графік на ${isToday ? 'сьогодні' : 'завтра'}</div><button class="link" data-go="detail">Детальніше ${ic('chevron-right')}</button></div>
    <div class="seg" role="group"><button data-day="0" aria-pressed="${isToday}">Сьогодні</button><button data-day="1" aria-pressed="${!isToday}" ${tmr ? '' : ''}>Завтра</button></div>
@@ -258,7 +258,7 @@ async function detail() {
   return `${band(`Графік · Черга ${esc(a.queue)}`, true)}<section class="sheet r32">
    <div class="seg"><button data-day="0" aria-pressed="${isToday}">Сьогодні</button><button data-day="1" aria-pressed="${!isToday}">Завтра</button></div>
    <div id="addr-status"></div>${segs ? `<div class="card">${scaleHTML(segs, isToday ? min : null)}</div><div style="display:flex;gap:8px">${tile('Зі світлом', dur(sum(['on'])), 'on')}${tile('Без світла', dur(sum(['off', 'emergency'])), 'off')}${tile('Можливо', dur(sum(['possible'])), 'possible')}</div>
-   <div class="card" style="gap:0;padding:4px 16px">${segs.map(s => evRow(s, min, isToday)).join('')}</div>` : `<div class="empty-day">${ic('calendar')}<div>Графік ще не опубліковано</div></div>`}
+   <div class="card" style="gap:0;padding:4px 16px">${segs.map(s => evRow(s, min, isToday)).join('')}</div>` : `<div class="empty-day">${ic('calendar')}<div>Графік ще не опубліковано</div></div><button class="btn secondary recheck" data-act="recheck">${ic('refresh')}Перевірити</button>`}
    <div class="card" style="gap:10px">${sourceLine(data, a)}<div class="cap">Графік може змінюватися протягом дня. Статус — за опублікованим графіком, а не фактична наявність світла.</div></div></section>`;
 }
 
@@ -381,6 +381,16 @@ function openSheet(html, cls = '') {
   document.body.append(o, s);
 }
 function closeSheet() { document.querySelectorAll('.overlay,.bsheet').forEach(n => n.remove()); }
+// Примусова перевірка: просимо сервер зібрати графіки заново (не частіше разу на хвилину), потім перечитуємо все
+let refreshing = false;
+async function refreshNow() {
+  if (refreshing) return false; refreshing = true;
+  try {
+    if (API_READY) await fetch(`${API}api/tick`, { cache: 'no-store' }).catch(() => {});
+    clearScheduleCache(); for (const k of Object.keys(addrCache)) delete addrCache[k];
+    await render(); await refreshAddrs(); return true;
+  } finally { refreshing = false; }
+}
 function toast(t) { document.querySelector('.toast')?.remove(); const d = document.createElement('div'); d.className = 'toast'; d.innerHTML = ic('check') + esc(t); document.body.append(d); setTimeout(() => d.remove(), 3500); }
 
 async function segSheet(i) {
@@ -475,6 +485,12 @@ document.addEventListener('click', async e => {
     case 'setlang': S.lang = t.dataset.v; save(); setLang(S.lang); closeSheet(); render(); syncPush(); break;
     case 'settheme': S.theme = t.dataset.v; save(); closeSheet(); render(); break;
     case 'sources': sourcesSheet(); break;
+    case 'recheck': {
+      const b = e.target.closest('[data-act]'); b.disabled = true; b.classList.add('busy'); b.lastChild.textContent = 'Перевіряю…';
+      const d = addDays(kyivNow().date, day), a = cur();
+      await refreshNow();
+      const data = a && await loadSchedule(region(a.regionId).op);
+      toast(a && segmentsFor(data, d, a.queue) ? 'Графік оновлено' : `Графік на ${day ? 'завтра' : 'сьогодні'} ще не опубліковано`); break; }
     case 'clearcache': clearScheduleCache(); if ('caches' in window) { const k = await caches.keys(); await Promise.all(k.filter(x => x.includes('data')).map(x => caches.delete(x))); } toast('Графіки оновлено'); render(); break;
     case 'npush': try {
         if (!S.notify.enabled) { const p = await Notification.requestPermission(); if (p !== 'granted') { notifSheet(); break; } await pushSub(true); S.notify.enabled = true; save(); await syncPush(); toast('Сповіщення увімкнено'); }
@@ -508,6 +524,26 @@ if ('serviceWorker' in navigator) {
   }).catch(() => {});
 }
 
+// Потягнути вниз на головному екрані — оновити
+(() => {
+  let y0 = null, dy = 0; const TH = 72;
+  const ind = document.createElement('div'); ind.className = 'ptr'; ind.innerHTML = ic('refresh'); document.body.append(ind);
+  const atTop = () => (document.scrollingElement || document.documentElement).scrollTop <= 0;
+  document.addEventListener('touchstart', e => { y0 = view === 'home' && !document.querySelector('.bsheet') && atTop() && e.touches.length === 1 ? e.touches[0].clientY : null; dy = 0; }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (y0 == null || refreshing) return;
+    dy = e.touches[0].clientY - y0; if (dy <= 0) { ind.style.cssText = ''; return; }
+    if (e.cancelable) e.preventDefault();
+    const p = Math.min(dy / TH, 1.4);
+    ind.style.cssText = `opacity:${Math.min(p, 1)};transform:translate(-50%,${Math.min(dy * .55, 90)}px) rotate(${p * 270}deg)`; ind.classList.toggle('ready', p >= 1);
+  }, { passive: false });
+  document.addEventListener('touchend', async () => {
+    if (y0 == null) return; y0 = null;
+    if (dy < TH || refreshing) { ind.style.cssText = ''; ind.classList.remove('ready'); return; }
+    ind.classList.add('spin'); ind.style.cssText = 'opacity:1;transform:translate(-50%,56px)';
+    try { await refreshNow(); toast('Оновлено'); } finally { ind.classList.remove('spin', 'ready'); ind.style.cssText = ''; }
+  });
+})();
 // Таймер із секундами — оновлюється щосекунди без перерендеру
 setInterval(() => {
   const el = document.querySelector('[data-countdown]'); if (!el) return;
