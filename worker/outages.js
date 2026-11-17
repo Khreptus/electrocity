@@ -178,16 +178,16 @@ export async function pwAddress(op, { city, street, house }, nowIso, ctx) {
     const streets = await pwCached(`${op}/st/${cid}`, 86400, ctx, async () => (await pwGet(P.api, `/pw_streets?pagination=false&city.id=${cid}`)).map(x => [x.id, x.name]));
     const st = streets.find(([, n]) => streetKey(n) === sk); if (!st) continue;
     const q = `?pagination=false&city.id=${cid}&street.id=${st[0]}`;
-    const ev = await pwCached(`${op}/ev/${cid}/${st[0]}/${Math.floor(Date.now() / 300e3)}`, 300, ctx, async () => {
+    const ev = await pwCached(`${op}/ev2/${cid}/${st[0]}/${Math.floor(Date.now() / 300e3)}`, 300, ctx, async () => {
       const [a, p] = await Promise.all([pwGet(P.api, `/pw_accidents${q}`), pwGet(P.api, `/pw_accident_planeds${q}`)]);
-      // у коментарі аварії буває ПІБ заявника — не зберігаємо й не показуємо його
-      return [...a.map(e => ['emergency', e.dateEvent, e.datePlanIn, e.buildingNames || '', '']), ...p.map(e => ['planned', e.dateEvent, e.datePlanIn, e.buildingNames || '', e.koment || ''])];
+      // у коментарях бувають ПІБ заявників і номери їхніх ТУ — коментар не зберігаємо й не показуємо взагалі
+      return [...a.map(e => ['emergency', e.dateEvent, e.datePlanIn, e.buildingNames || '']), ...p.map(e => ['planned', e.dateEvent, e.datePlanIn, e.buildingNames || ''])];
     });
     const items = [];
-    for (const [kind, s0, e0, bn, reason] of ev) {
+    for (const [kind, s0, e0, bn] of ev) {
       const end = pwIso(e0); if (end && nowIso && end < nowIso) continue;
       const scope = !String(bn).trim() ? 'street' : houseIn(bn, house) ? 'house' : null; if (!scope) continue;
-      items.push({ kind, reason: kind === 'emergency' ? 'Аварійне відключення' : reason, start: pwIso(s0), end, scope, source: P.name });
+      items.push({ kind, reason: kind === 'emergency' ? 'Аварійне відключення' : 'Планові роботи', start: pwIso(s0), end, scope, source: P.name });
     }
     return { found: true, at: new Date().toISOString(), items: items.sort((a, b) => (a.start || '').localeCompare(b.start || '')) };
   }
