@@ -88,7 +88,14 @@ async function tick(env, manual = false) {
     try {
       const fresh = await src.fetch(fetchText);
       const days = Object.fromEntries(Object.entries(fresh.days).filter(([d]) => d >= now.date).sort());
-      if (!Object.keys(days).length) throw new Error('немає днів');
+      if (!Object.keys(days).length) {
+        // джерело працює, але чинного графіка немає — зберігаємо порожній запис (раз), щоб застосунок не показував демо
+        if (!prev || Object.keys(prev.days || {}).some(d => d >= now.date) || !prev.empty) {
+          const next = { operator: fresh.operator, name: fresh.name, source: fresh.source, days: {}, empty: true, publishedAt: fresh.publishedAt || null, updatedAt: prev?.updatedAt || new Date(0).toISOString() };
+          await env.KV.put('sched:' + src.op, JSON.stringify(next)); data[src.op] = next;
+        }
+        status[src.op] = { ok: true, empty: true, at: new Date().toISOString() }; return;
+      }
       const same = prev && JSON.stringify(prev.days) === JSON.stringify(days) && prev.publishedAt === fresh.publishedAt;
       if (!same) {
         const next = { ...fresh, days, updatedAt: new Date().toISOString() };
