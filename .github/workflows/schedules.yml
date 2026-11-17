@@ -1,8 +1,8 @@
 name: Графіки відключень
 
 on:
-  # Решту графіків збирає Cloudflare Worker. Тут — сайти ДТЕК (Дніпро, Київ, Київщина, Донеччина),
-  # бо вони не пускають сервери Cloudflare.
+  # Решту графіків збирає Cloudflare Worker. Тут — сайти ДТЕК (Дніпро, Київщина, Донеччина), бо вони не пускають
+  # сервери Cloudflare, і Сумиобленерго (дані розшифровуються лише на сторінці в браузері).
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
           node-version: 20
       - name: Зібрати графіки
         id: fetch
-        run: node scripts/fetch-schedules.mjs dtek-dnem dtek-krem dtek-dem
+        run: node scripts/fetch-schedules.mjs dtek-dnem dtek-krem dtek-dem soe
       - name: Запасний варіант через браузер (якщо сайт блокує прості запити)
         if: steps.fetch.outputs.need_browser != ''
         run: |

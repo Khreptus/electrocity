@@ -57,7 +57,7 @@ export function addDays(dateStr, n) {
 }
 
 // Оператори з підключеними офіційними джерелами
-export const LIVE_OPS = new Set(['dtek-oem', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem', 'hoe', 'moe', 'khoe', 'zoe', 'poe-poltava', 'choe', 'cheroe', 'zhoe', 'loe', 'poe', 'roe', 'toe', 'zakoe', 'voe', 'chernoe']);
+export const LIVE_OPS = new Set(['dtek-oem', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem', 'hoe', 'moe', 'khoe', 'zoe', 'poe-poltava', 'choe', 'cheroe', 'zhoe', 'loe', 'poe', 'roe', 'toe', 'zakoe', 'voe', 'chernoe', 'soe']);
 export const isLive = op => LIVE_OPS.has(op);
 
 // ---------- Завантаження графіка ----------

@@ -143,6 +143,46 @@ async function moe({ op, name, url }) {
   return { operator: op, name, source: { url, kind: 'official' }, days };
 }
 
+
+// ---------- Сумиобленерго: soe.com.ua (дані шифруються на сервері й розшифровуються на сторінці — читаємо в браузері) ----------
+// Сторінка «Графік погодинних відключень» показує один день: [{ cherga_n: '1.1', no_data, last_update: 'Оновлено: 17.11.2026 01:39',
+// lst_time_disc: [{ start_time: '08:00', end_time: '12:00' }] }]. Дату дня беремо з last_update: опубліковано сьогодні,
+// або вчора ввечері (≥ 18:00) — це графік на сьогодні; старіше — вчорашній, пропускаємо.
+export function parseSoe(list, now = new Date()) {
+  if (!Array.isArray(list) || !list.length || !list.every(x => x && 'cherga_n' in x)) throw new Error('Сумиобленерго: формат змінився');
+  const today = kyivDate(now), yest = kyivDate(new Date(now.getTime() - 864e5));
+  const lu = list.map(x => String(x.last_update || '').match(/(\d{2})\.(\d{2})\.(\d{4})\D+(\d{1,2}):(\d{2})/)).find(Boolean);
+  let date = today;
+  if (lu) { const d = `${lu[3]}-${lu[2]}-${lu[1]}`; if (d < today && !(d === yest && +lu[4] >= 18)) return {}; }
+  if (list.every(x => x.no_data)) return {};
+  const day = {};
+  for (const x of list) {
+    const q = String(x.cherga_n).trim(); if (!/^\d\.\d$/.test(q)) continue;
+    const sl = Array(48).fill('on');
+    for (const r of x.lst_time_disc || []) {
+      const a = toMin(r.start_time), b = toMin(r.end_time) || 1440;
+      for (let t = a; t < (b > a ? b : 1440); t += 30) sl[Math.floor(t / 30)] = 'off';
+    }
+    day[q] = slotsToSegs(sl);
+  }
+  if (!Object.keys(day).length) throw new Error('Сумиобленерго: черги не розпізнано (формат змінився)');
+  return { [date]: day };
+}
+async function soe({ op, name, url }) {
+  let chromium;
+  try { ({ chromium } = await import('playwright')); } catch { throw new Error('NEED_BROWSER'); }
+  const b = await chromium.launch();
+  try {
+    const p = await b.newPage({ userAgent: UA, locale: 'uk-UA' });
+    // Сторінка сама розшифровує дані й розбирає JSON — запам'ятовуємо масив черг, який вона отримала
+    await p.addInitScript(() => { const orig = JSON.parse; JSON.parse = function (...a) { const r = orig.apply(this, a); try { if (Array.isArray(r) && r[0] && typeof r[0] === 'object' && 'cherga_n' in r[0]) window.__soe = r; } catch {} return r; }; });
+    await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await p.waitForFunction(() => window.__soe, null, { timeout: 45000 });
+    const list = await p.evaluate(() => window.__soe);
+    return { operator: op, name, source: { url, kind: 'official' }, days: parseSoe(list) };
+  } finally { await b.close(); }
+}
+
 // ---------- запуск ----------
 const SOURCES = [
   { op: 'dtek-oem', name: 'ДТЕК Одеські електромережі', url: 'https://www.dtek-oem.com.ua/ua/shutdowns', run: dtek },
@@ -152,6 +192,7 @@ const SOURCES = [
   { op: 'dtek-dem', name: 'ДТЕК Донецькі електромережі', url: 'https://www.dtek-dem.com.ua/ua/shutdowns', run: dtek },
   { op: 'hoe', name: 'Хмельницькобленерго', url: 'https://hoe.com.ua/page/pogodinni-vidkljuchennja', run: hoe },
   { op: 'moe', name: 'Миколаївобленерго', url: 'https://off.energy.mk.ua/', run: moe },
+  { op: 'soe', name: 'Сумиобленерго', url: 'https://www.soe.com.ua/consumers/shutdowns?tab=hourly-schedules', run: soe },
 ];
 if (process.argv[1]?.endsWith('fetch-schedules.mjs')) {
 const only = process.argv.slice(2);

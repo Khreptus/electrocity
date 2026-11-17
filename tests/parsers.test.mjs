@@ -89,3 +89,15 @@ test('Пошук адреси: російська розкладка й «вул
   assert.ok(yasnoVariants('Сыкорского').some(v => v.startsWith('Сікор')));
   assert.deepEqual(yasnoVariants('Хр'), []);
 });
+
+import { parseSoe } from '../scripts/fetch-schedules.mjs';
+test('Суми: черги з браузера, дата з «Оновлено»', () => {
+  const now = new Date('2026-11-17T20:00:00Z');
+  const L = upd => [{ cherga_n: '1.1', no_data: false, last_update: upd, lst_time_disc: [{ start_time: '08:00', end_time: '12:00' }, { start_time: '22:00', end_time: '00:00' }] }, { cherga_n: '1.2', no_data: false, last_update: upd, lst_time_disc: [] }];
+  const r = parseSoe(L('Оновлено: 17.11.2026 01:39'), now);
+  assert.deepEqual(off(r['2026-11-17']['1.1']), [[480, 720], [1320, 1440]]);
+  assert.deepEqual(off(r['2026-11-17']['1.2']), []);
+  assert.ok(parseSoe(L('Оновлено: 16.11.2026 21:10'), now)['2026-11-17'], 'вчора ввечері — графік на сьогодні');
+  assert.deepEqual(parseSoe(L('Оновлено: 16.11.2026 09:00'), now), {}, 'старий графік не беремо');
+  assert.throws(() => parseSoe([{ foo: 1 }], now), /формат змінився/);
+});

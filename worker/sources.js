@@ -185,8 +185,9 @@ export const SOURCES = [
   // Сайти ДТЕК (крім Одеси) закриті Incapsula для серверів Cloudflare. Графік з того ж офіційного сайту
   // збирає GitHub Actions (раз на 15 хв) у data/schedules/<op>.json — беремо готовий файл.
   ...[['dtek-dnem', 'ДТЕК Дніпровські електромережі', 'dnem'],
-      ['dtek-dem', 'ДТЕК Донецькі електромережі', 'dem']].map(([op, name, h]) => ({ op, fetch: async get => {
-    const meta = { operator: op, name, source: { url: `https://www.dtek-${h}.com.ua/ua/shutdowns`, kind: 'official' } };
+      ['dtek-dem', 'ДТЕК Донецькі електромережі', 'dem'],
+      ['soe', 'Сумиобленерго', null]].map(([op, name, h]) => ({ op, fetch: async get => {
+    const meta = { operator: op, name, source: { url: h ? `https://www.dtek-${h}.com.ua/ua/shutdowns` : 'https://www.soe.com.ua/consumers/shutdowns?tab=hourly-schedules', kind: 'official' } };
     const notice = op === 'dtek-dnem' ? await yasnoNotice(get, 3, 301) : null; if (notice) meta.notice = notice;
     if (op === 'dtek-dnem') try { return { ...meta, source: { url: 'https://static.yasno.ua/dnipro/outages', kind: 'official' }, ...parseYasno(JSON.parse(await get(`${YASNO}/regions/3/dsos/301/planned-outages`))) }; } catch { /* резерв — файл GitHub */ }
     const j = JSON.parse(await get(`https://raw.githubusercontent.com/Khreptus/electrocity/main/data/schedules/${op}.json`));
