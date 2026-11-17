@@ -145,6 +145,55 @@ export async function moeAddress({ city, street, house }, nowIso, ctx) {
   return { found: false, at: new Date().toISOString(), items: [] };
 }
 
+// ---------- Платформа «Чому немає світла?» (Львівобленерго, Волиньобленерго) ----------
+// Відкритий API: pw_cities → pw_streets → pw_accidents (аварії) / pw_accident_planeds (планові), фільтр за city.id і street.id.
+export const PW = {
+  loe: { api: 'https://power-api.loe.lviv.ua/api', name: 'Львівобленерго', url: 'https://poweron.loe.lviv.ua/' },
+  'voe-volyn': { api: 'https://api-voe-poweron.inneti.net/api', name: 'Волиньобленерго', url: 'https://www.energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni/chomu-nemaie-elektropostachannia/' },
+};
+const pwGet = (base, path) => fetch(`${base}${path}`, { headers: { 'User-Agent': UA, Accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+async function pwCached(key, ttl, ctx, load) {
+  const ck = new Request(`https://cache.electrocity/pw/${key}`);
+  const hit = await caches.default.match(ck); if (hit) return hit.json();
+  const data = await load();
+  const put = caches.default.put(ck, new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${ttl}` } }));
+  ctx?.waitUntil ? ctx.waitUntil(put) : await put;
+  return data;
+}
+// «2-Г, 6, 7» або «1-15» → чи входить будинок
+function houseIn(list, house) {
+  const hk = houseKey(house); if (!hk) return false;
+  const n = parseInt(hk, 10);
+  return String(list).split(/[,;]/).map(x => x.trim()).filter(Boolean).some(x => {
+    if (houseKey(x) === hk) return true;
+    const r = x.match(/^(\d+)\s*[-–]\s*(\d+)$/); // діапазон лише з чистих чисел
+    return r && +r[2] > +r[1] && String(n) === hk && n >= +r[1] && n <= +r[2];
+  });
+}
+const pwIso = s => (s ? String(s).slice(0, 16) : null); // «2026-11-17T17:00:00+02:00» — уже київський час
+export async function pwAddress(op, { city, street, house }, nowIso, ctx) {
+  const P = PW[op]; const pk = placeKey(city), sk = streetKey(street);
+  const cities = await pwCached(`${op}/cities`, 7 * 86400, ctx, async () => (await pwGet(P.api, '/pw_cities?pagination=false')).map(c => [c.id, c.name]));
+  for (const [cid] of cities.filter(([, n]) => placeKey(n) === pk)) {
+    const streets = await pwCached(`${op}/st/${cid}`, 86400, ctx, async () => (await pwGet(P.api, `/pw_streets?pagination=false&city.id=${cid}`)).map(x => [x.id, x.name]));
+    const st = streets.find(([, n]) => streetKey(n) === sk); if (!st) continue;
+    const q = `?pagination=false&city.id=${cid}&street.id=${st[0]}`;
+    const ev = await pwCached(`${op}/ev/${cid}/${st[0]}/${Math.floor(Date.now() / 300e3)}`, 300, ctx, async () => {
+      const [a, p] = await Promise.all([pwGet(P.api, `/pw_accidents${q}`), pwGet(P.api, `/pw_accident_planeds${q}`)]);
+      // у коментарі аварії буває ПІБ заявника — не зберігаємо й не показуємо його
+      return [...a.map(e => ['emergency', e.dateEvent, e.datePlanIn, e.buildingNames || '', '']), ...p.map(e => ['planned', e.dateEvent, e.datePlanIn, e.buildingNames || '', e.koment || ''])];
+    });
+    const items = [];
+    for (const [kind, s0, e0, bn, reason] of ev) {
+      const end = pwIso(e0); if (end && nowIso && end < nowIso) continue;
+      const scope = !String(bn).trim() ? 'street' : houseIn(bn, house) ? 'house' : null; if (!scope) continue;
+      items.push({ kind, reason: kind === 'emergency' ? 'Аварійне відключення' : reason, start: pwIso(s0), end, scope, source: P.name });
+    }
+    return { found: true, at: new Date().toISOString(), items: items.sort((a, b) => (a.start || '').localeCompare(b.start || '')) };
+  }
+  return { found: false, at: new Date().toISOString(), items: [] };
+}
+
 // ---------- ДТЕК ----------
 const DTEK_HOST = { 'dtek-oem': 'https://www.dtek-oem.com.ua', 'dtek-dnem': 'https://www.dtek-dnem.com.ua', 'dtek-kem': 'https://www.dtek-kem.com.ua', 'dtek-krem': 'https://www.dtek-krem.com.ua', 'dtek-dem': 'https://www.dtek-dem.com.ua' };
 export const DTEK_NAME = { 'dtek-oem': 'ДТЕК Одеські електромережі', 'dtek-dnem': 'ДТЕК Дніпровські електромережі', 'dtek-kem': 'ДТЕК Київські електромережі', 'dtek-krem': 'ДТЕК Київські регіональні електромережі', 'dtek-dem': 'ДТЕК Донецькі електромережі' };
@@ -223,6 +272,10 @@ export async function addressStatus(env, params, ctx, nowIso) {
   if (op === 'hoe') {
     const r = await hoeAddress(env, { city, street, house }, nowIso, ctx);
     return { ok: true, supported: true, checkedAt: r.at, items: r.items, source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/all' };
+  }
+  if (op in PW) {
+    const r = await pwAddress(op, { city, street, house }, nowIso, ctx);
+    return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: PW[op].name, url: PW[op].url };
   }
   if (op === 'moe') {
     const r = await moeAddress({ city, street, house }, nowIso, ctx);

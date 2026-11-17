@@ -9,7 +9,7 @@ const PARAM = (args.widgetParameter || '').trim();
 const P = PARAM ? (([op, queue, name]) => ({ op, queue, name }))(PARAM.split('|').map(s => s.trim()))
   : (PRESET || { op: 'dtek-oem', queue: '3.2', name: 'Дім' });
 const OP = P.op, QUEUE = P.queue, NAME = P.name || 'Дім';
-const ADDR_OPS = ['hoe', 'dtek-oem', 'moe', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem'];
+const ADDR_OPS = ['hoe', 'dtek-oem', 'moe', 'loe', 'voe-volyn', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem'];
 const C = {
   bg: new Color('#1B1B1B'), text: new Color('#F3F4F1'), text2: new Color('#9A9B99'), text3: new Color('#6B7078'),
   light: new Color('#E7B77E'), dim: new Color('#8A8E95'), alert: new Color('#FF6B7A'),
