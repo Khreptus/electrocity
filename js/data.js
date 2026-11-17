@@ -6,7 +6,7 @@ const Q6x2 = { type: 'sub', groups: 6, subs: 2 };   // 1.1 … 6.2
 const Q6 = { type: 'plain', groups: 6 };             // 1 … 6
 
 export const REGIONS = [
-  { id: 'kyiv-city', name: 'м. Київ', center: 'Київ', op: 'dtek-kem', opName: 'ДТЕК Київські електромережі', queues: Q6x2 },
+  { id: 'kyiv-city', name: 'м. Київ', center: 'Київ', op: 'dtek-kem', opName: 'ДТЕК Київські електромережі', queues: { type: 'sub', groups: 60, subs: 1 } }, // YASNO: групи 1.1…60.1
   { id: 'kyiv', name: 'Київська', center: 'Біла Церква', op: 'dtek-krem', opName: 'ДТЕК Київські регіональні електромережі', queues: Q6x2 },
   { id: 'vinnytsia', name: 'Вінницька', center: 'Вінниця', op: 'voe', opName: 'Вінницяобленерго', queues: Q6x2 },
   { id: 'volyn', name: 'Волинська', center: 'Луцьк', op: 'voe-volyn', opName: 'Волиньобленерго', queues: Q6x2 },
@@ -57,7 +57,7 @@ export function addDays(dateStr, n) {
 }
 
 // Оператори з підключеними офіційними джерелами
-export const LIVE_OPS = new Set(['dtek-oem', 'dtek-dnem', 'hoe', 'moe']);
+export const LIVE_OPS = new Set(['dtek-oem', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem', 'hoe', 'moe', 'khoe', 'zoe', 'poe-poltava', 'choe', 'cheroe', 'zhoe', 'loe', 'poe', 'roe', 'toe', 'zakoe', 'voe']);
 export const isLive = op => LIVE_OPS.has(op);
 
 // ---------- Завантаження графіка ----------

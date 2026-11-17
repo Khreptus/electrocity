@@ -21,6 +21,11 @@ const HALF = { yes: ['on', 'on'], no: ['off', 'off'], first: ['off', 'on'], seco
 export function parseDtek(html) {
   const fact = extractJSON(html, 'DisconSchedule.fact');
   if (!fact?.data) throw new Error('ДТЕК: немає DisconSchedule.fact (можливо, захист від ботів)');
+  return parseFact(fact);
+}
+// Об'єкт fact у форматі ДТЕК: { data: { <unix 00:00 за Києвом>: { GPV1.1: { 1..24: yes|no|first|second|maybe|mfirst|msecond } } }, update }
+export function parseFact(fact) {
+  if (!fact?.data) throw new Error('немає даних графіка');
   const days = {};
   for (const [ts, groups] of Object.entries(fact.data)) {
     const date = kyivDate(new Date(+ts * 1000 + 3 * 3600e3)); const day = {};
@@ -72,17 +77,58 @@ export function parseMoe(ts, queues, active) {
 }
 
 const MOE = 'https://off.energy.mk.ua/api';
+const YASNO = 'https://app.yasno.ua/api/blackout-service/public/shutdowns';
+// YASNO: { "1.1": { today: { date, status, slots: [{start,end,type}] }, tomorrow: {...}, updatedOn } }
+const YTYPE = { NotPlanned: 'on', Definite: 'off', Possible: 'possible', Probable: 'possible' };
+export function parseYasno(j) {
+  const days = {}; let upd = null;
+  for (const [q, g] of Object.entries(j || {})) {
+    if (g.updatedOn && (!upd || g.updatedOn > upd)) upd = g.updatedOn;
+    for (const k of ['today', 'tomorrow']) {
+      const d = g[k]; if (!d?.date || !Array.isArray(d.slots) || !d.slots.length || !/Applies/i.test(d.status || '')) continue;
+      const date = d.date.slice(0, 10);
+      (days[date] ||= {})[q] = merge(d.slots.map(x => [x.start, x.end, YTYPE[x.type] || 'unknown']));
+    }
+  }
+  if (!Object.keys(days).length) throw new Error('YASNO: графіка ще немає');
+  return { days, publishedAt: upd };
+}
+const RAW = 'https://raw.githubusercontent.com';
+const Y29 = `${RAW}/yaroslav2901/OE_OUTAGE_DATA/main/data`;
+export const AGG = [
+  ['khoe', 'Харківобленерго', 'https://www.oblenergo.kharkov.ua/', `${Y29}/Kharkivoblenerho.json`],
+  ['zoe', 'Запоріжжяобленерго', 'https://www.zoe.com.ua/', `${Y29}/Zaporizhzhiaoblenergo.json`],
+  ['poe-poltava', 'Полтаваобленерго', 'https://www.poe.pl.ua/disconnection/power-outages/', `${Y29}/Poltavaoblenergo.json`],
+  ['choe', 'Черкасиобленерго', 'https://www.cherkasyoblenergo.com/', `${Y29}/Cherkasyoblenergo.json`],
+  ['cheroe', 'Чернігівобленерго', 'https://chernihivoblenergo.com.ua/', `${Y29}/Chernihivoblenergo.json`],
+  ['zhoe', 'Житомиробленерго', 'https://www.ztoe.com.ua/unhooking-search.php', `${Y29}/Zhytomyroblenergo.json`],
+  ['loe', 'Львівобленерго', 'https://poweron.loe.lviv.ua/', `${Y29}/Lvivoblenerho.json`],
+  ['poe', 'Прикарпаттяобленерго', 'https://www.oe.if.ua/uk/shutdowns_table', `${Y29}/Prykarpattiaoblenerho.json`],
+  ['roe', 'Рівнеобленерго', 'https://www.roe.vsei.ua/disconnections', `${Y29}/Rivneoblenergo.json`],
+  ['toe', 'Тернопільобленерго', 'https://www.toe.com.ua/', `${Y29}/Ternopiloblenerho.json`],
+  ['zakoe', 'Закарпаттяобленерго', 'https://zakarpat.energy/customers/break-in-electricity-supply/schedule/', `${Y29}/Zakarpattiaoblenerho.json`],
+  ['voe', 'Вінницяобленерго', 'https://www.voe.com.ua/disconnection/detailed', `${RAW}/vn-progr/gpv-voe-vinnytsia/main/data/Vinnytsiaoblenerho.json`],
+  ['dtek-krem', 'ДТЕК Київські регіональні електромережі', 'https://www.dtek-krem.com.ua/ua/shutdowns', `${RAW}/Baskerville42/outage-data-ua/main/data/kyiv-region.json`],
+];
 export const SOURCES = [
   { op: 'dtek-oem', fetch: async get => ({ operator: 'dtek-oem', name: 'ДТЕК Одеські електромережі', source: { url: 'https://www.dtek-oem.com.ua/ua/shutdowns', kind: 'official' }, ...parseDtek(await get('https://www.dtek-oem.com.ua/ua/shutdowns')) }) },
   // Сайти ДТЕК (крім Одеси) закриті Incapsula для серверів Cloudflare. Графік з того ж офіційного сайту
   // збирає GitHub Actions (раз на 15 хв) у data/schedules/<op>.json — беремо готовий файл.
-  ...[['dtek-dnem', 'ДТЕК Дніпровські електромережі', 'dnem'], ['dtek-kem', 'ДТЕК Київські електромережі', 'kem'],
-      ['dtek-krem', 'ДТЕК Київські регіональні електромережі', 'krem'], ['dtek-dem', 'ДТЕК Донецькі електромережі', 'dem']].map(([op, name, h]) => ({ op, fetch: async get => {
+  ...[['dtek-dnem', 'ДТЕК Дніпровські електромережі', 'dnem'],
+      ['dtek-dem', 'ДТЕК Донецькі електромережі', 'dem']].map(([op, name, h]) => ({ op, fetch: async get => {
     const meta = { operator: op, name, source: { url: `https://www.dtek-${h}.com.ua/ua/shutdowns`, kind: 'official' } };
+    if (op === 'dtek-dnem') try { return { ...meta, source: { url: 'https://static.yasno.ua/dnipro/outages', kind: 'official' }, ...parseYasno(JSON.parse(await get(`${YASNO}/regions/3/dsos/301/planned-outages`))) }; } catch { /* резерв — файл GitHub */ }
     const j = JSON.parse(await get(`https://raw.githubusercontent.com/Khreptus/electrocity/main/data/schedules/${op}.json`));
     const age = Date.now() - Date.parse(j.checkedAt || j.updatedAt || 0);
     if (!(age < 6 * 3600e3)) throw new Error(`файл ${name} застарів`);
     return { ...meta, days: j.days, publishedAt: j.publishedAt };
+  } })),
+  // Київ — офіційний API YASNO (ДТЕК): 60 груп 1.1…60.1; запасний варіант — файл зі збирача GitHub
+  { op: 'dtek-kem', fetch: async get => ({ operator: 'dtek-kem', name: 'ДТЕК Київські електромережі', source: { url: 'https://static.yasno.ua/kyiv/outages', kind: 'official' }, ...parseYasno(JSON.parse(await get(`${YASNO}/regions/25/dsos/902/planned-outages`))) }) },
+  // Обленерго, чиї офіційні графіки збирають відкриті проєкти у форматі ДТЕК (оновлення кожні кілька хвилин)
+  ...AGG.map(([op, name, url, file]) => ({ op, fetch: async get => {
+    const j = JSON.parse(await get(file));
+    return { operator: op, name, source: { url, kind: 'aggregator', via: file.replace('https://raw.githubusercontent.com/', 'github.com/').replace(/\/main\/.*$/, '') }, ...parseFact(j.fact) };
   } })),
   { op: 'hoe', fetch: async get => ({ operator: 'hoe', name: 'Хмельницькобленерго', source: { url: 'https://hoe.com.ua/page/pogodinni-vidkljuchennja', kind: 'official' }, ...parseHoe(await get('https://hoe.com.ua/page/pogodinni-vidkljuchennja')) }) },
   { op: 'moe', fetch: async get => { const [a, b, c] = await Promise.all([get(`${MOE}/schedule/time-series`), get(`${MOE}/outage-queue/by-type/3`), get(`${MOE}/v2/schedule/active`)]);

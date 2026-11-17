@@ -234,7 +234,8 @@ function sourceLine(data, a) {
   if (data.demo) return `<div class="source warn">${ic('info')}Демо-дані · джерело ${esc(region(a.regionId)?.opName)} ще не підключене</div>`;
   const t = data.updatedAt ? new Date(data.updatedAt).toLocaleString(locale(), { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
   const when = data.live ? 'дані в реальному часі' : data.publishedAt ? `опубліковано ${esc(data.publishedAt)}` : t ? `оновлено ${t}` : '';
-  return `<a class="source ok" href="${esc(data.source?.url || '#')}" target="_blank" rel="noopener">${ic('shield')}${esc(data.name || region(a.regionId)?.opName)} · ${when} ${ic('external')}</a>`;
+  const via = data.source?.kind === 'aggregator' ? ` · через відкритий збирач ${esc(data.source.via || '')}` : '';
+  return `<a class="source ok" href="${esc(data.source?.url || '#')}" target="_blank" rel="noopener">${ic('shield')}${esc(data.name || region(a.regionId)?.opName)} · ${when}${via} ${ic('external')}</a>`;
 }
 function banners(data) {
   let b = '';
