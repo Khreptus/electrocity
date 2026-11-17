@@ -12,7 +12,7 @@ const core = s => norm(s).replace(/^(м|с|смт|с-ще|селище|сел|в
 export const skel = s => norm(s).replace(/[’ʼ`ъь]/g, '').replace(/ґ/g, 'г').replace(/[аеєёэиіїйоуыюя]+/g, '*').replace(/(.)\1+/g, '$1');
 const ruAlias = q => q.replace(/^никола/, 'микола');
 export function rank(items, q, key = x => x.label) {
-  const nq = norm(q); if (!nq) return items.slice(0, 30);
+  const nq = norm(q).replace(/[,\s]+\d+[а-яіїєa-z]?\s*$/i, '').trim(); if (!nq) return items.slice(0, 30); // «Хрещатик 22» → «Хрещатик»
   const sq = skel(ruAlias(core(nq))); const useSk = sq.replace(/\*/g, '').length >= 2;
   const out = [];
   for (const it of items) {
@@ -20,7 +20,7 @@ export function rank(items, q, key = x => x.label) {
     let i = c.startsWith(nq) ? 0 : l.startsWith(nq) ? 1 : c.split(/[\s-]/).some(w => w.startsWith(nq)) ? 2 : l.includes(nq) ? 3 : -1;
     if (i < 0 && useSk) { const sc = skel(c); i = sc.startsWith(sq) ? 4 : sc.split(/[\s-]/).some(w => w.startsWith(sq)) ? 5 : -1; }
     // усі слова запиту є на початку слів назви, у будь-якому порядку: «Лесі Українки» → «бул. Українки Лесі»
-    if (i < 0) { const qw = core(nq).split(/[\s,.\-]+/).filter(w => w && !/^\d/.test(w)); const lw = l.split(/[\s,.\-()]+/); if (qw.length > 1 && qw.every(w => lw.some(x => x.startsWith(w) || (useSk && skel(x).startsWith(skel(w)))))) i = 6; }
+    if (i < 0) { const qw = core(nq).split(/[\s,.\-]+/).filter(w => w && !/^\d/.test(w)); const lw = l.split(/[\s,.\-()]+/); if (qw.length && qw.every(w => lw.some(x => x.startsWith(w) || (useSk && skel(x).startsWith(skel(w)))))) i = 6; }
     if (i >= 0) out.push([i, it]);
   }
   return out.sort((a, b) => a[0] - b[0] || key(a[1]).localeCompare(key(b[1]), 'uk')).slice(0, 30).map(x => x[1]);
