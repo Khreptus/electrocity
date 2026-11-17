@@ -96,7 +96,8 @@ async function tick(env, manual = false) {
       const days = Object.fromEntries(Object.entries(fresh.days).filter(([d]) => d >= now.date).sort());
       if (!Object.keys(days).length) {
         // джерело працює, але чинного графіка немає — зберігаємо порожній запис (раз), щоб застосунок не показував демо
-        if (!prev || Object.keys(prev.days || {}).some(d => d >= now.date) || !prev.empty) {
+        // ніколи не затираємо чинний графік: порожній запис — лише якщо збереженого графіка на сьогодні/завтра теж немає
+        if (!prev || (!prev.empty && !Object.keys(prev.days || {}).some(d => d >= now.date))) {
           const next = { operator: fresh.operator, name: fresh.name, source: fresh.source, days: {}, empty: true, publishedAt: fresh.publishedAt || null, updatedAt: prev?.updatedAt || new Date(0).toISOString() };
           await env.KV.put('sched:' + src.op, JSON.stringify(next)); data[src.op] = next;
         }

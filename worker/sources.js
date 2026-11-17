@@ -45,9 +45,13 @@ export function parseHoe(html) {
   const today = kyivDate(new Date()); const year = +today.slice(0, 4), curMon = +today.slice(5, 7);
   const days = {};
   for (const part of text.split(/(?=За розпорядженням)/)) {
-    const m = part.match(/(\d{1,2})\s+(січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|жовтня|листопада|грудня)/); if (!m) continue;
-    const mon = MONTHS[m[2]]; let y = year; if (mon === 1 && curMon === 12) y++; else if (mon === 12 && curMon === 1) y--;
-    const date = `${y}-${String(mon).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`; if (days[date]) continue;
+    // дата: «18.11.2026» (новий формат) або «18 листопада» (старий)
+    const dn = part.slice(0, 300).match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    const m = dn ? null : part.match(/(\d{1,2})\s+(січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|жовтня|листопада|грудня)/); if (!dn && !m) continue;
+    let date;
+    if (dn) date = `${dn[3]}-${dn[2].padStart(2, '0')}-${dn[1].padStart(2, '0')}`;
+    else { const mon = MONTHS[m[2]]; let y = year; if (mon === 1 && curMon === 12) y++; else if (mon === 12 && curMon === 1) y--; date = `${y}-${String(mon).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`; }
+    if (days[date]) continue;
     const lines = [...part.matchAll(/Підчерга\s+(\d\.\d)\s*[–—-]\s*([^\n]+)/g)];
     const notApplied = /не\s+(будуть\s+)?застосов/i.test(part) && !lines.length;
     if (!lines.length && !notApplied) continue;
