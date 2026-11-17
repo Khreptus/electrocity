@@ -204,6 +204,7 @@ const P = [
   [/^Черга (\S+)$/, q => `Queue ${q}`, q => `Gruppe ${q}`],
   [/^Черга (\S+) · графіків відключень не застосовують$/, q => `Queue ${q} · no outage schedules in effect`, q => `Gruppe ${q} · keine Abschaltpläne in Kraft`],
   [/^Черга (\S+) · на сьогодні відключень не заплановано$/, q => `Queue ${q} · no outages planned today`, q => `Gruppe ${q} · heute keine Abschaltungen geplant`],
+  [/^Перевіряємо вашу адресу на сайті (.+) — результат з’явиться протягом 15 хв$/, s => `Checking your address on the ${s} website — result within 15 min`, s => `Wir prüfen Ihre Adresse auf der Website von ${s} — Ergebnis in 15 Min.`],
   [/^Черга (\S+) · графік не опубліковано$/, q => `Queue ${q} · schedule not published`, q => `Gruppe ${q} · Plan nicht veröffentlicht`],
   [/^Аварій і планових робіт за адресою немає(?: · перевірено о (.+))?$/, t => `No emergency or planned outages at your address${t ? ` · checked at ${t}` : ''}`, t => `Keine Störungen oder Arbeiten an Ihrer Adresse${t ? ` · geprüft um ${t}` : ''}`],
   [/^Наступне відключення — завтра о (.+)$/, t => `Next outage — tomorrow at ${t}`, t => `Nächste Abschaltung — morgen um ${t}`],

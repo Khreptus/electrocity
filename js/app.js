@@ -57,7 +57,7 @@ async function render() {
 }
 
 // ---------- Стан за конкретною адресою: аварійні й планові відключення ----------
-const ADDR_OPS = new Set(['hoe', 'dtek-oem', 'moe']);
+const ADDR_OPS = new Set(['hoe', 'dtek-oem', 'moe', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem']);
 const addrCache = {};
 const isoHM = iso => iso ? iso.slice(11, 16) : '…';
 const isoDM = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '';
@@ -87,7 +87,7 @@ function overlaySegs(segs, items, d) {
 const addrKey = a => [region(a.regionId)?.op, a.city, a.street, a.house].join('|');
 const addrItemsCached = a => (addrCache[addrKey(a)]?.j?.items || []).filter(it => it.kind !== 'schedule');
 // Перевірка адреси на сайті обленерго пройшла і нічого не знайшла (будинок знайдено, подій немає)
-const addrClear = a => { const j = addrCache[addrKey(a)]?.j; return !!(j?.ok && j.supported && j.found !== false && !(j.items || []).some(it => it.kind !== 'schedule')); };
+const addrClear = a => { const j = addrCache[addrKey(a)]?.j; return !!(j?.ok && j.supported && !j.pending && j.found !== false && !(j.items || []).some(it => it.kind !== 'schedule')); };
 // Графіка на сьогодні немає, а за адресою подій не зареєстровано — вважаємо, що світло є
 const withAddr = (a, segs, d) => {
   if (!segs && d === kyivNow().date && addrClear(a)) { const s = [[0, 1440, 'on']]; s.none = true; s.byAddr = true; return s; }
@@ -122,6 +122,7 @@ async function addrStatus(a) {
   if (!API_READY || !ADDR_OPS.has(op) || !a.street || !a.house) return;
   const r = addrCache[addrKey(a)]; if (!r) return;
   const j = r.j; if (!j?.ok || !j.supported || !document.contains(box)) return;
+  if (j.pending) { box.innerHTML = `<div class="addr-ok">${ic('refresh')}<span>Перевіряємо вашу адресу на сайті ${esc(j.source || 'оператора')} — результат з’явиться протягом 15 хв</span></div>`; return; }
   const { date, min } = kyivNow(); const nowIso = `${date}T${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
   const items = (j.items || []).filter(it => it.kind !== 'schedule');
   const active = items.filter(it => (!it.start || it.start <= nowIso) && (!it.end || it.end > nowIso));

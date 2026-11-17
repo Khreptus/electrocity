@@ -5,7 +5,7 @@
 // • усе інше — статичні файли застосунку (ASSETS)
 import { parseDtek, parseHoe, parseMoe, SOURCES } from './sources.js';
 import { sendPush, vapidKeys } from './push.js';
-import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME } from './outages.js';
+import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME, DTEK_RUNNER, dtekViaRunner, dtekQueue, dtekStore } from './outages.js';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 const json = (d, s = 200, h = {}) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, ...h } });
@@ -46,7 +46,13 @@ export default {
         return json({ ok: r.ok, status: r.status });
       }
       if (p === '/api/outage') { const n = kyiv(); return json(await addressStatus(env, url.searchParams, ctx, `${n.date}T${String(Math.floor(n.min / 60)).padStart(2, '0')}:${String(n.min % 60).padStart(2, '0')}`), 200, { 'Cache-Control': 'public, max-age=120' }); }
-      if (p === '/api/dtek/houses') return json(await dtekHouses(url.searchParams, ctx), 200, { 'Cache-Control': 'public, max-age=3600' });
+      if (p === '/api/dtek/houses') { const r = await dtekHouses(url.searchParams, ctx, env); return json(r, 200, { 'Cache-Control': r.pending ? 'no-store' : 'public, max-age=3600' }); }
+      // службові маршрути для GitHub Actions (секрет DTEK_KEY)
+      if (p.startsWith('/api/internal/')) {
+        if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
+        if (p === '/api/internal/dtek-queue') return json({ items: await dtekQueue(env) });
+        if (p === '/api/internal/dtek-result' && req.method === 'POST') return json({ ok: true, stored: await dtekStore(env, (await req.json()).results) });
+      }
       if (p === '/api/stats/install' && req.method === 'POST') {
         const { platform } = await req.json().catch(() => ({}));
         const st = JSON.parse(await env.KV.get('stats') || '{"installs":0,"by":{}}');
@@ -150,7 +156,8 @@ async function addrItems(env, a, now) {
   const nowIso = `${now.date}T${String(Math.floor(now.min / 60)).padStart(2, '0')}:${String(now.min % 60).padStart(2, '0')}`;
   if (a.op === 'hoe') return (await hoeAddress(env, a, nowIso)).items;
   if (a.op === 'moe') return (await moeAddress(a, nowIso)).items.filter(it => it.kind !== 'schedule');
-  if (DTEK_NAME[a.op] && a.op !== 'dtek-dnem') return dtekHouseStatus(await dtekStreet(a.op, a.city, a.street), a.op, a.house).items;
+  if (DTEK_RUNNER.has(a.op)) { if (!env.DTEK_KEY) return []; const raw = await dtekViaRunner(env, a.op, a.city, a.street); return raw ? dtekHouseStatus(raw, a.op, a.house).items : []; }
+  if (DTEK_NAME[a.op]) return dtekHouseStatus(await dtekStreet(a.op, a.city, a.street), a.op, a.house).items;
   return [];
 }
 function addrMsg(a, it) {
@@ -253,9 +260,14 @@ async function unsubscribe(env, endpoint) {
 
 // ---------- ДТЕК: будинки й черги для вулиці ----------
 const DTEK_HOST = { 'dtek-oem': 'https://www.dtek-oem.com.ua', 'dtek-dnem': 'https://www.dtek-dnem.com.ua', 'dtek-kem': 'https://www.dtek-kem.com.ua', 'dtek-krem': 'https://www.dtek-krem.com.ua', 'dtek-dem': 'https://www.dtek-dem.com.ua' };
-async function dtekHouses(params, ctx) {
+async function dtekHouses(params, ctx, env) {
   const op = params.get('op'), city = params.get('city'), street = params.get('street');
   const host = DTEK_HOST[op]; if (!host || !city || !street) throw new Error('потрібні op, city, street');
+  if (DTEK_RUNNER.has(op) && env.DTEK_KEY) {
+    const raw = await dtekViaRunner(env, op, city, street);
+    if (!raw) return { op, city, street, pending: true, houses: {} };
+    return { op, city, street, houses: Object.fromEntries(Object.entries(raw.data).map(([h, v]) => [h, (v.sub_type_reason || []).map(g => g.replace(/^GPV/, ''))])) };
+  }
   const cacheKey = new Request(`https://cache.electrocity/dtek/${op}/${encodeURIComponent(city)}/${encodeURIComponent(street)}`);
   const cached = await caches.default.match(cacheKey); if (cached) return cached.json();
   const page = await fetch(`${host}/ua/shutdowns`, { headers: { 'User-Agent': UA, 'Accept-Language': 'uk-UA' } });

@@ -181,6 +181,42 @@ export function dtekHouseStatus(raw, op, house) {
   return { found: true, items: [{ kind, reason, start: isoDtek(v.start_date), end: isoDtek(v.end_date), scope: 'house', source: DTEK_NAME[op] || 'ДТЕК' }] };
 }
 
+
+// ---------- ДТЕК через GitHub Actions (сайти, що не пускають Cloudflare) ----------
+// Застосунок питає адресу → вулиця стає в чергу (KV dtekq) → раз на 15 хв GitHub Actions бере чергу
+// (з секретом DTEK_KEY), робить getHomeNum на сайті ДТЕК і повертає результат (KV dtekres) → відповідаємо з нього.
+export const DTEK_RUNNER = new Set(['dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem']);
+const RES_TTL = 45 * 60e3;
+let resMemo = null;
+async function dtekRes(env) { if (!resMemo || Date.now() - resMemo.t > 60e3) resMemo = { t: Date.now(), v: JSON.parse(await env.KV.get('dtekres') || '{}') }; return resMemo.v; }
+export async function dtekViaRunner(env, op, city, street) {
+  const key = `${op}|${city}|${street}`;
+  const r = (await dtekRes(env))[key];
+  if (r && Date.now() - Date.parse(r.at) < RES_TTL) return r;
+  // ставимо в чергу (запис у KV — лише коли вулиці ще немає або позначка застаріла, щоб не витрачати ліміт записів)
+  const q = JSON.parse(await env.KV.get('dtekq') || '{}'); const last = q[key] ? Date.parse(q[key]) : 0;
+  if (Date.now() - last > 6 * 3600e3) {
+    q[key] = new Date().toISOString();
+    for (const [k, t] of Object.entries(q)) if (Date.now() - Date.parse(t) > 3 * 86400e3) delete q[k];
+    await env.KV.put('dtekq', JSON.stringify(q));
+  }
+  return r || null; // застарілий результат краще, ніж нічого (позначимо в checkedAt)
+}
+export async function dtekQueue(env) {
+  const q = JSON.parse(await env.KV.get('dtekq') || '{}');
+  const keys = new Set(Object.keys(q));
+  const subs = JSON.parse(await env.KV.get('subs') || '{}');
+  for (const s of Object.values(subs)) for (const a of s.addrs || []) if (DTEK_RUNNER.has(a.op) && a.city && a.street) keys.add(`${a.op}|${a.city}|${a.street}`);
+  return [...keys].slice(0, 400).map(k => k.split('|'));
+}
+export async function dtekStore(env, results) {
+  const cur = JSON.parse(await env.KV.get('dtekres') || '{}'); const at = new Date().toISOString();
+  for (const r of results || []) if (r && r.op && r.city && r.street && r.data) cur[`${r.op}|${r.city}|${r.street}`] = { data: r.data, updated: r.updated || null, at };
+  for (const [k, v] of Object.entries(cur)) if (Date.now() - Date.parse(v.at) > 2 * 86400e3) delete cur[k];
+  await env.KV.put('dtekres', JSON.stringify(cur)); resMemo = null;
+  return Object.keys(cur).length;
+}
+
 // ---------- єдиний запит для застосунку ----------
 export async function addressStatus(env, params, ctx, nowIso) {
   const op = params.get('op'), city = params.get('city') || '', street = params.get('street') || '', house = params.get('house') || '';
@@ -192,7 +228,15 @@ export async function addressStatus(env, params, ctx, nowIso) {
     const r = await moeAddress({ city, street, house }, nowIso, ctx);
     return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: 'Миколаївобленерго', url: 'https://www.energy.mk.ua/vidklyuchennya/' };
   }
-  if (op in DTEK_HOST && op !== 'dtek-dnem') {
+  if (DTEK_RUNNER.has(op)) {
+    if (!env.DTEK_KEY) return { ok: true, supported: false, items: [] }; // перевірка через GitHub ще не налаштована
+    if (!street) return { ok: true, supported: true, items: [] };
+    const raw = await dtekViaRunner(env, op, city, street);
+    if (!raw) return { ok: true, supported: true, pending: true, items: [], source: DTEK_NAME[op], url: `${DTEK_HOST[op]}/ua/shutdowns` };
+    const s = dtekHouseStatus(raw, op, house);
+    return { ok: true, supported: true, found: s.found, checkedAt: raw.at, items: s.items, source: DTEK_NAME[op], url: `${DTEK_HOST[op]}/ua/shutdowns` };
+  }
+  if (op in DTEK_HOST) {
     const raw = await dtekStreet(op, city, street, ctx);
     const s = dtekHouseStatus(raw, op, house);
     return { ok: true, supported: true, found: s.found, checkedAt: raw.at, items: s.items, source: DTEK_NAME[op], url: `${DTEK_HOST[op]}/ua/shutdowns` };

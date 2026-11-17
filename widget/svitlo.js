@@ -9,7 +9,7 @@ const PARAM = (args.widgetParameter || '').trim();
 const P = PARAM ? (([op, queue, name]) => ({ op, queue, name }))(PARAM.split('|').map(s => s.trim()))
   : (PRESET || { op: 'dtek-oem', queue: '3.2', name: 'Дім' });
 const OP = P.op, QUEUE = P.queue, NAME = P.name || 'Дім';
-const ADDR_OPS = ['hoe', 'dtek-oem', 'moe'];
+const ADDR_OPS = ['hoe', 'dtek-oem', 'moe', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem'];
 const C = {
   bg: new Color('#1B1B1B'), text: new Color('#F3F4F1'), text2: new Color('#9A9B99'), text3: new Color('#6B7078'),
   light: new Color('#E7B77E'), dim: new Color('#8A8E95'), alert: new Color('#FF6B7A'),
@@ -50,7 +50,7 @@ async function loadAddr() {
     const q = Object.entries({ op: OP, city: P.city || '', street: P.street, house: P.house }).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     const r = new Request(`${BASE}api/outage?${q}`); r.timeoutInterval = 12; const j = await r.loadJSON();
     const items = (j?.items || []).filter(it => it.kind !== 'schedule');
-    ADDR_OK = !!(j?.ok && j.supported && j.found !== false && !items.length);
+    ADDR_OK = !!(j?.ok && j.supported && !j.pending && j.found !== false && !items.length);
     return items;
   } catch { return []; }
 }
