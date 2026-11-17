@@ -173,12 +173,13 @@ async function soe({ op, name, url }) {
   try { ({ chromium } = await import('playwright')); } catch { throw new Error('NEED_BROWSER'); }
   const b = await chromium.launch();
   try {
-    const p = await b.newPage({ userAgent: UA, locale: 'uk-UA' });
+    const p = await b.newPage({ userAgent: UA, locale: 'uk-UA', bypassCSP: true });
     // Сторінка сама розшифровує дані й розбирає JSON — запам'ятовуємо масив черг, який вона отримала
     await p.addInitScript(() => { const orig = JSON.parse; JSON.parse = function (...a) { const r = orig.apply(this, a); try { if (Array.isArray(r) && r[0] && typeof r[0] === 'object' && 'cherga_n' in r[0]) window.__soe = r; } catch {} return r; }; });
     await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await p.waitForFunction(() => window.__soe, null, { timeout: 45000 });
-    const list = await p.evaluate(() => window.__soe);
+    let list = null; // CSP сайту забороняє eval, тож опитуємо через evaluate, а не waitForFunction
+    for (let i = 0; i < 45 && !list; i++) { list = await p.evaluate(() => window.__soe || null); if (!list) await p.waitForTimeout(1000); }
+    if (!list) throw new Error('Сумиобленерго: сторінка не віддала графік за 45 с');
     return { operator: op, name, source: { url, kind: 'official' }, days: parseSoe(list) };
   } finally { await b.close(); }
 }
