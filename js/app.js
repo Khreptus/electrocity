@@ -1,6 +1,6 @@
 import { setLang, LANGS, detectLang, locale, tr } from './i18n.js';
 import { ic, STATE_ICON } from './icons.js';
-import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, skel } from './address.js';
+import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, skel, isYasno, yasnoGroup } from './address.js';
 import { API, API_READY } from './config.js';
 import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr, freeDay } from './data.js';
 
@@ -371,7 +371,7 @@ function onboarding() {
     <button class="opt" data-act="method" data-v="address" aria-pressed="${draft.method === 'address'}"><span class="ot">${ic('map-pin')}</span><span><span class="h-s">За адресою</span><br><span class="body-s">Вкажіть вулицю й будинок — чергу визначимо автоматично, щойно оператор це підтримає</span></span></button>
     <button class="opt" data-act="method" data-v="queue" aria-pressed="${draft.method === 'queue'}"><span class="ot">${ic('grid')}</span><span><span class="h-s">Я знаю свою чергу</span><br><span class="body-s">Оберіть чергу або підчергу зі списку оператора</span></span></button>
     <div style="flex:1"></div><button class="btn primary" data-act="method-next">Продовжити</button></section>`;
-  if (view === 'ob-address') { const auto = (r.addressLookup === 'moe' && draft.nsId) || dtekAuto(r) || (r.op === 'hoe' && draft.hoeId); return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
+  if (view === 'ob-address') { const auto = (r.addressLookup === 'moe' && draft.nsId) || dtekAuto(r) || isYasno(r) || (r.op === 'hoe' && draft.hoeId); return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
     <label class="field">${ic('search')}<input id="street" placeholder="Вулиця — почніть вводити" value="${esc(draft.street || '')}" autocomplete="off" enterkeyhint="next"></label>
     <label class="field">${ic('home')}<input id="house" placeholder="Номер будинку" value="${esc(draft.house || '')}" autocomplete="off" enterkeyhint="done"></label>
     <div id="addr-res"></div>
@@ -585,7 +585,7 @@ render().finally(() => {
 // ---------- Підказки адреси ----------
 function initCity() {
   const r = region(draft.regionId), inp = document.getElementById('city');
-  attachTypeahead(inp, citySource(r), it => { draft.city = it.label; draft.nsId = it.id || null; draft.hoeId = it.hoe || null; draft.street = ''; draft.streetId = null; draft.house = ''; view = 'ob-method'; render(); }, { minChars: 0 });
+  attachTypeahead(inp, citySource(r), it => { draft.city = it.label; draft.nsId = it.id || null; draft.hoeId = it.hoe || null; draft.yasnoCity = it.yasnoCity || null; draft.street = ''; draft.streetId = null; draft.house = ''; view = 'ob-method'; render(); }, { minChars: 0 });
   if (!draft.city) inp.focus();
 }
 function initAddress() {
@@ -609,6 +609,8 @@ function initAddress() {
   const setupHouse = () => { houseSrc = houseSource(r, draft);
     if (houseSrc && !houseTA) houseTA = attachTypeahead(hs, q => houseSrc ? houseSrc(q) : Promise.resolve([]), it => {
       draft.house = it.label;
+      if (it.yasnoHouse) { res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Шукаємо чергу для адреси…</div></div>`;
+        return yasnoGroup(r.op, draft.streetId, it.yasnoHouse).then(q => q ? found(q, 'YASNO') : notFound('YASNO не повернув групу для цього будинку.')).catch(() => notFound('Сервіс YASNO зараз не відповідає.')); }
       if (it.id) return lookup(it.id);
       if (it.queues) { const qs = [...new Set(it.queues.filter(x => /^\d\.\d$/.test(x)))];
         if (!qs.length) return notFound('Оператор не вказав чергу для цього будинку.');

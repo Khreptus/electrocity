@@ -46,6 +46,8 @@ export default {
         return json({ ok: r.ok, status: r.status });
       }
       if (p === '/api/outage') { const n = kyiv(); return json(await addressStatus(env, url.searchParams, ctx, `${n.date}T${String(Math.floor(n.min / 60)).padStart(2, '0')}:${String(n.min % 60).padStart(2, '0')}`), 200, { 'Cache-Control': 'public, max-age=120' }); }
+      // YASNO (ДТЕК): довідник адрес і група за адресою — Київ (25/902) і Дніпропетровщина (3/301)
+      if (p.startsWith('/api/yasno/')) return json(await yasnoAddr(p.slice(11), url.searchParams, ctx), 200, { 'Cache-Control': 'public, max-age=3600' });
       if (p === '/api/dtek/houses') { const r = await dtekHouses(url.searchParams, ctx, env); return json(r, 200, { 'Cache-Control': r.pending ? 'no-store' : 'public, max-age=3600' }); }
       // службові маршрути для GitHub Actions (секрет DTEK_KEY)
       if (p.startsWith('/api/internal/')) {
@@ -293,4 +295,23 @@ async function dtekHouses(params, ctx, env) {
   const res = { op, city, street, houses };
   ctx.waitUntil(caches.default.put(cacheKey, new Response(JSON.stringify(res), { headers: { 'Cache-Control': 'max-age=21600' } })));
   return res;
+}
+
+const YASNO_IDS = { 'dtek-kem': [25, 902], 'dtek-dnem': [3, 301] };
+async function yasnoAddr(kind, q, ctx) {
+  const ids = YASNO_IDS[q.get('op')]; if (!ids) throw new Error('регіон не підтримується');
+  const [region, dso] = ids; const B = 'https://app.yasno.ua/api/blackout-service/public/shutdowns/addresses/v2';
+  const P = new URLSearchParams({ regionId: region, dsoId: dso });
+  if (kind === 'cities') P.set('query', q.get('q') || '');
+  else if (kind === 'streets') { P.set('query', q.get('q') || ''); if (q.get('cityId')) P.set('cityId', q.get('cityId')); }
+  else if (kind === 'houses') { P.set('streetId', q.get('streetId')); P.set('query', q.get('q') || ''); }
+  else if (kind === 'group') { P.set('streetId', q.get('streetId')); P.set('houseId', q.get('houseId')); }
+  else throw new Error('невідомий запит');
+  const u = `${B}/${kind}?${P}`; const ck = new Request(`https://cache.electrocity/yasno/${kind}?${P}`);
+  const hit = await caches.default.match(ck); if (hit) return hit.json();
+  const r = await fetch(u, { headers: { 'User-Agent': UA, Accept: 'application/json' } }); if (!r.ok) throw new Error(`YASNO ${r.status}`);
+  const j = await r.json();
+  const out = kind === 'group' ? { queue: j?.group ? `${j.group}.${j.subgroup || 1}` : null } : (j || []).map(x => ({ id: x.id, label: x.value }));
+  ctx.waitUntil(caches.default.put(ck, new Response(JSON.stringify(out), { headers: { 'Cache-Control': `max-age=${kind === 'group' ? 21600 : 86400}` } })));
+  return out;
 }

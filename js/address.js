@@ -63,8 +63,19 @@ async function photon(q, extra) {
 }
 const uniq = (arr, k) => { const s = new Set(); return arr.filter(x => { const v = k(x); if (s.has(v)) return false; s.add(v); return true; }); };
 
+// ---------- YASNO (ДТЕК): Київ і Дніпропетровщина — довідник адрес і група за адресою ----------
+export const YASNO_OPS = new Set(['dtek-kem', 'dtek-dnem']);
+export const isYasno = region => YASNO_OPS.has(region.op) && API_READY;
+const yq = (kind, params) => fetch(`${API}api/yasno/${kind}?${new URLSearchParams(params)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+export const yasnoGroup = (op, streetId, houseId) => yq('group', { op, streetId, houseId }).then(j => j.queue);
+
 // ---------- Публічні джерела для онбордингу ----------
 export function citySource(region) {
+  if (isYasno(region)) return async q => {
+    if (region.op === 'dtek-kem') return [{ label: 'м. Київ' }]; // у Києві вулиці шукаються без вибору міста
+    if (norm(q).length < 2) return [];
+    return rank((await yq('cities', { op: region.op, q })).map(c => ({ label: c.label, yasnoCity: c.id })), q);
+  };
   if (region.op.startsWith('dtek-')) return async q => {
     const d = await dtekDir(region.op);
     if (d) return rank(Object.keys(d).map(label => ({ label })), q);
@@ -87,6 +98,11 @@ async function osmCities(region, q) {
 }
 
 export function streetSource(region, draft) {
+  if (isYasno(region)) return async q => {
+    if (norm(q).length < 2) return [];
+    const p = { op: region.op, q }; if (draft.yasnoCity) p.cityId = draft.yasnoCity;
+    return rank((await yq('streets', p)).map(x => ({ label: x.label, id: x.id })), q).slice(0, 20);
+  };
   if (region.op.startsWith('dtek-')) return async q => {
     const d = await dtekDir(region.op);
     const list = d?.[draft.city];
@@ -115,9 +131,10 @@ export async function dtekHouses(op, city, street) {
   dtekHouseCache[k] ||= fetch(`${API}api/dtek/houses?op=${encodeURIComponent(op)}&city=${encodeURIComponent(city)}&street=${encodeURIComponent(street)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(e => { delete dtekHouseCache[k]; throw e; });
   return dtekHouseCache[k];
 }
-export const dtekAuto = region => region.op.startsWith('dtek-') && API_READY;
+export const dtekAuto = region => region.op.startsWith('dtek-') && !YASNO_OPS.has(region.op) && API_READY;
 
 export function houseSource(region, draft) {
+  if (isYasno(region) && draft.streetId) return async q => rank((await yq('houses', { op: region.op, streetId: draft.streetId, q })).map(x => ({ label: x.label, yasnoHouse: x.id })), q).slice(0, 40);
   if (dtekAuto(region) && draft.street) return async q => {
     const d = await dtekHouses(region.op, draft.city, draft.street);
     return rank(Object.entries(d.houses).map(([label, qs]) => ({ label, queues: qs })), q).slice(0, 40);
