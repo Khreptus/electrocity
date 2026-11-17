@@ -96,7 +96,7 @@ async function tick(env, manual = false) {
         }
         status[src.op] = { ok: true, empty: true, at: new Date().toISOString() }; return;
       }
-      const same = prev && JSON.stringify(prev.days) === JSON.stringify(days) && prev.publishedAt === fresh.publishedAt;
+      const same = prev && JSON.stringify(prev.days) === JSON.stringify(days) && prev.publishedAt === fresh.publishedAt && (prev.notice || null) === (fresh.notice || null);
       if (!same) {
         const next = { ...fresh, days, updatedAt: new Date().toISOString() };
         await env.KV.put('sched:' + src.op, JSON.stringify(next));

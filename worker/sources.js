@@ -80,6 +80,14 @@ const MOE = 'https://off.energy.mk.ua/api';
 const YASNO = 'https://app.yasno.ua/api/blackout-service/public/shutdowns';
 // YASNO: { "1.1": { today: { date, status, slots: [{start,end,type}] }, tomorrow: {...}, updatedOn } }
 const YTYPE = { NotPlanned: 'on', Definite: 'off', Possible: 'possible', Probable: 'possible' };
+// Оголошення оператора з YASNO (напр. «у м. Дніпро діють екстрені відключення»)
+export async function yasnoNotice(get, region, dso) {
+  try {
+    const j = JSON.parse(await get(`${YASNO}/regions/${region}/dsos/${dso}/settings`));
+    const t = String(j?.startupModalMessage || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&#39;|&apos;/g, '’').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+    return t || null;
+  } catch { return null; }
+}
 export function parseYasno(j) {
   const days = {}; let upd = null;
   for (const [q, g] of Object.entries(j || {})) {
@@ -117,6 +125,7 @@ export const SOURCES = [
   ...[['dtek-dnem', 'ДТЕК Дніпровські електромережі', 'dnem'],
       ['dtek-dem', 'ДТЕК Донецькі електромережі', 'dem']].map(([op, name, h]) => ({ op, fetch: async get => {
     const meta = { operator: op, name, source: { url: `https://www.dtek-${h}.com.ua/ua/shutdowns`, kind: 'official' } };
+    const notice = op === 'dtek-dnem' ? await yasnoNotice(get, 3, 301) : null; if (notice) meta.notice = notice;
     if (op === 'dtek-dnem') try { return { ...meta, source: { url: 'https://static.yasno.ua/dnipro/outages', kind: 'official' }, ...parseYasno(JSON.parse(await get(`${YASNO}/regions/3/dsos/301/planned-outages`))) }; } catch { /* резерв — файл GitHub */ }
     const j = JSON.parse(await get(`https://raw.githubusercontent.com/Khreptus/electrocity/main/data/schedules/${op}.json`));
     const age = Date.now() - Date.parse(j.checkedAt || j.updatedAt || 0);
@@ -124,7 +133,7 @@ export const SOURCES = [
     return { ...meta, days: j.days, publishedAt: j.publishedAt };
   } })),
   // Київ — офіційний API YASNO (ДТЕК): 60 груп 1.1…60.1; запасний варіант — файл зі збирача GitHub
-  { op: 'dtek-kem', fetch: async get => ({ operator: 'dtek-kem', name: 'ДТЕК Київські електромережі', source: { url: 'https://static.yasno.ua/kyiv/outages', kind: 'official' }, ...parseYasno(JSON.parse(await get(`${YASNO}/regions/25/dsos/902/planned-outages`))) }) },
+  { op: 'dtek-kem', fetch: async get => ({ operator: 'dtek-kem', name: 'ДТЕК Київські електромережі', source: { url: 'https://static.yasno.ua/kyiv/outages', kind: 'official' }, notice: await yasnoNotice(get, 25, 902), ...parseYasno(JSON.parse(await get(`${YASNO}/regions/25/dsos/902/planned-outages`))) }) },
   // Обленерго, чиї офіційні графіки збирають відкриті проєкти у форматі ДТЕК (оновлення кожні кілька хвилин)
   ...AGG.map(([op, name, url, file]) => ({ op, fetch: async get => {
     const j = JSON.parse(await get(file));

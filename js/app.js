@@ -239,6 +239,7 @@ function sourceLine(data, a) {
 }
 function banners(data) {
   let b = '';
+  if (data?.notice) b += `<div class="banner warn">${ic('alert')}<div><div class="bt">Оголошення оператора</div><div class="bb">${esc(data.notice)}</div></div></div>`;
   if (!navigator.onLine) b += `<div class="banner warn">${ic('wifi-off')}<div><div class="bt">Немає з’єднання</div><div class="bb">Показуємо збережений графік.</div></div></div>`;
   if (data.demo) b += `<div class="banner demo">${ic('info')}<div><div class="bt">Це демо-графік</div><div class="bb">Реальні дані оператора підключимо найближчим часом. Не орієнтуйтеся на ці інтервали.</div></div></div>`;
   return b;

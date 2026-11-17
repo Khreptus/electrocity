@@ -20,6 +20,7 @@ const T = [
   ['Час наступної зміни невідомий', 'Next change time unknown', 'Zeitpunkt der nächsten Änderung unbekannt'],
   ['Відключень немає', 'No outages', 'Keine Abschaltungen'],
   ['До кінця доби', 'Until end of day', 'Bis Tagesende'],
+  ['Оголошення оператора', 'Grid operator notice', 'Mitteilung des Netzbetreibers'],
   ['За даними обленерго для вашої адреси', 'Per grid operator data for your address', 'Laut Netzbetreiber für Ihre Adresse'], ['Графік на завтра', 'Tomorrow’s schedule', 'Plan für morgen'], ['ще не опубліковано', 'not published yet', 'noch nicht veröffentlicht'], ['Без відключень', 'No outages', 'Keine Abschaltungen'],
   ['Світло за графіком до кінця доби', 'Power on per schedule until end of day', 'Laut Plan Strom bis Tagesende'],
   ['За даними обленерго', 'Per grid operator data', 'Laut Netzbetreiber'],
