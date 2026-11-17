@@ -175,10 +175,22 @@ async function soe({ op, name, url }) {
   try {
     const p = await b.newPage({ userAgent: UA, locale: 'uk-UA', bypassCSP: true });
     // Сторінка сама розшифровує дані й розбирає JSON — запам'ятовуємо масив черг, який вона отримала
-    await p.addInitScript(() => { const orig = JSON.parse; JSON.parse = function (...a) { const r = orig.apply(this, a); try { if (Array.isArray(r) && r[0] && typeof r[0] === 'object' && 'cherga_n' in r[0]) window.__soe = r; } catch {} return r; }; });
+    await p.addInitScript(() => { const orig = JSON.parse; JSON.parse = function (...a) { const r = orig.apply(this, a); try { const a = Array.isArray(r) ? r : r && (r.data || r.result); if (Array.isArray(a) && a[0] && typeof a[0] === 'object' && 'cherga_n' in a[0]) window.__soe = a; } catch {} return r; }; });
     await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     let list = null; // CSP сайту забороняє eval, тож опитуємо через evaluate, а не waitForFunction
-    for (let i = 0; i < 45 && !list; i++) { list = await p.evaluate(() => window.__soe || null); if (!list) await p.waitForTimeout(1000); }
+    // 1) масив, який сторінка розібрала з JSON; 2) дані зі стану React-компонента таблиці (якщо розбір іде іншим шляхом)
+    const grab = () => {
+      if (window.__soe) return window.__soe;
+      const el = [...document.querySelectorAll('body *')].find(e => e.childElementCount === 0 && /^Черга\s+\d\.\d$/.test(e.textContent.trim()));
+      if (!el) return null;
+      let f = el[Object.keys(el).find(k => k.startsWith('__reactFiber'))];
+      for (let k = 0; k < 80 && f; k++, f = f.return) {
+        let st = f.memoizedState, j = 0;
+        while (st && j < 20) { const d = st.memoizedState?.data; if (Array.isArray(d) && d[0] && typeof d[0] === 'object' && 'cherga_n' in d[0]) return d; st = st.next; j++; }
+      }
+      return null;
+    };
+    for (let i = 0; i < 45 && !list; i++) { list = await p.evaluate(grab); if (!list) await p.waitForTimeout(1000); }
     if (!list) throw new Error('Сумиобленерго: сторінка не віддала графік за 45 с');
     return { operator: op, name, source: { url, kind: 'official' }, days: parseSoe(list) };
   } finally { await b.close(); }

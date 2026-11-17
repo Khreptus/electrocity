@@ -6,7 +6,10 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 
 const BASE = 'https://oblenergo.cv.ua/shutdowns-search/';
 const OUT = new URL('../data/addr/chernoe/', import.meta.url);
-const UA = 'Mozilla/5.0 (compatible; Electrocity/1.0; +https://electrocity.slv463991.workers.dev)';
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+// Дільниці (на випадок, якщо головна сторінка пошуку не віддала список)
+const DISTS = [['1', 'ЧЕРНІВЦІ'], ['2', 'Вижницька'], ['3', 'Герцаївська'], ['4', 'Глибоцька'], ['5', 'Заставнівська'], ['6', 'Кіцманська'], ['7', 'Кельменецька'], ['8', 'Новоселицька'], ['9', 'Путильська'], ['10', 'Сокирянська'], ['11', 'Сторожинецька'], ['12', 'Хотинська']];
+const get = async u => { const r = await fetch(u, { headers: { 'User-Agent': UA, 'Accept-Language': 'uk-UA,uk;q=0.9', Accept: 'text/html' } }); const t = await r.text(); if (!r.ok) throw new Error(`${u} → HTTP ${r.status}`); return t; };
 const ent = s => s.replace(/&#039;|&#39;|&rsquo;/g, '’').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 // «м. ВИЖНИЦЯ» → «м. Вижниця», «с. НОВОСЕЛИЦЯ-НОВА» → «с. Новоселиця-Нова»
 const title = s => s.replace(/[А-ЯІЇЄҐ’'][А-ЯІЇЄҐ’'-]*/g, w => w.length > 1 && w === w.toUpperCase() ? w[0] + w.slice(1).toLowerCase() : w);
@@ -26,13 +29,13 @@ export function parseDistrict(html, defCity) {
 }
 
 async function main() {
-  const home = await (await fetch(BASE, { headers: { 'User-Agent': UA } })).text();
-  const dists = [...home.matchAll(/<option[^>]*value="(\d+)"[^>]*>([^<]+)<\/option>/g)].map(m => [m[1], ent(m[2])]);
-  if (!dists.length) throw new Error('не знайшов списку дільниць');
+  const home = await get(BASE).catch(e => { console.warn(e.message); return ''; });
+  let dists = [...home.matchAll(/<option[^>]*value="(\d+)"[^>]*>([^<]+)<\/option>/g)].map(m => [m[1], ent(m[2])]).filter(d => d[0] !== '0');
+  if (!dists.length) { console.warn(`список дільниць не знайдено (сторінка ${home.length} байт) — беру відомий`); dists = DISTS; }
   const all = []; let n = 0;
   const files = [];
   for (const [id, name] of dists) {
-    const html = await (await fetch(`${BASE}${id}/`, { headers: { 'User-Agent': UA } })).text();
+    const html = await get(`${BASE}${id}/`);
     const db = parseDistrict(html, id === '1' ? 'м. Чернівці' : '');
     const rem = /^[А-ЯІЇЄ]+$/.test(name) ? title(name) : `${name} дільниця`;
     for (const [city, streets] of Object.entries(db)) {
