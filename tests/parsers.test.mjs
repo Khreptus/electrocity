@@ -81,3 +81,11 @@ test('Чернівці: сьогодні — лише залишок доби, �
 test('Чернівці: незнайома сторінка — помилка', () => {
   assert.throws(() => parseCv('<html>нічого</html>'), /формат змінився/);
 });
+
+import { yasnoVariants } from '../worker/index.js';
+test('Пошук адреси: російська розкладка й «вул.» не заважають', () => {
+  assert.ok(yasnoVariants('Лесы Украинки').includes('Лесі'));
+  assert.ok(yasnoVariants('вул Хрещатик 22').includes('Хрещатик'));
+  assert.ok(yasnoVariants('Сыкорского').some(v => v.startsWith('Сікор')));
+  assert.deepEqual(yasnoVariants('Хр'), []);
+});

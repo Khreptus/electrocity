@@ -19,6 +19,8 @@ export function rank(items, q, key = x => x.label) {
     const l = norm(key(it)), c = core(key(it));
     let i = c.startsWith(nq) ? 0 : l.startsWith(nq) ? 1 : c.split(/[\s-]/).some(w => w.startsWith(nq)) ? 2 : l.includes(nq) ? 3 : -1;
     if (i < 0 && useSk) { const sc = skel(c); i = sc.startsWith(sq) ? 4 : sc.split(/[\s-]/).some(w => w.startsWith(sq)) ? 5 : -1; }
+    // усі слова запиту є на початку слів назви, у будь-якому порядку: «Лесі Українки» → «бул. Українки Лесі»
+    if (i < 0) { const qw = core(nq).split(/[\s,.\-]+/).filter(w => w && !/^\d/.test(w)); const lw = l.split(/[\s,.\-()]+/); if (qw.length > 1 && qw.every(w => lw.some(x => x.startsWith(w) || (useSk && skel(x).startsWith(skel(w)))))) i = 6; }
     if (i >= 0) out.push([i, it]);
   }
   return out.sort((a, b) => a[0] - b[0] || key(a[1]).localeCompare(key(b[1]), 'uk')).slice(0, 30).map(x => x[1]);

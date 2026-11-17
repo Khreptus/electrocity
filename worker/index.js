@@ -300,6 +300,27 @@ async function dtekHouses(params, ctx, env) {
 }
 
 const YASNO_IDS = { 'dtek-kem': [25, 902], 'dtek-dnem': [3, 301] };
+
+// Варіанти запиту до YASNO: без «вул./просп./бульв.», окремі слова (≥3 літер), російські літери → українські
+const ADDR_PREFIX = /^(вулиця|вул|улица|ул|проспект|просп|пр-т|пр|бульвар|бульв|бул|б-р|провулок|пров|переулок|пер|площа|площадь|пл|набережна|наб|шосе|узвіз|тупик|туп|майдан|місто|город|м|г|село|с|селище|смт|пгт)\.?\s+/i;
+export function yasnoVariants(raw) {
+  let q = String(raw || '').replace(/[«»"]/g, ' ').replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < 2; i++) q = q.replace(ADDR_PREFIX, '');
+  q = q.replace(/[,]+/g, ' ').replace(/\s+\d+[а-яіїєa-z]?$/i, '').trim(); // «Хрещатик 22» → «Хрещатик»
+  // російська розкладка на українських словах: і→ы, ї→ъ, є→э («Лесы» = «Лесі»); російське написання: ы→и, э→е, ё→е
+  const lay = s => s.replace(/ы/g, 'і').replace(/Ы/g, 'І').replace(/ъ/g, 'ї').replace(/Ъ/g, 'Ї').replace(/э/g, 'є').replace(/Э/g, 'Є').replace(/ё/g, 'е');
+  const ru = s => s.replace(/ы/g, 'и').replace(/Ы/g, 'И').replace(/э/g, 'е').replace(/Э/g, 'Е').replace(/ё/g, 'е').replace(/ъ/g, '’');
+  const out = [];
+  const add = v => { v = v.trim(); if (v.length >= 3 && !out.includes(v)) out.push(v); };
+  const hasRu = /[ыэъё]/i.test(q);
+  add(q); if (hasRu) { add(lay(q)); add(ru(q)); }
+  const words = q.split(/[\s.\-]+/).filter(w => w.length >= 3).sort((a, b) => b.length - a.length);
+  for (const w of words.slice(0, 2)) { add(w); if (hasRu) { add(lay(w)); add(ru(w)); } else if (/и/i.test(w)) add(w.replace(/и/g, 'і')); }
+  // на випадок помилки в кінці слова — початок довгого слова
+  if (words[0]?.length > 5) add((hasRu ? lay(words[0]) : words[0]).slice(0, 5));
+  return out.slice(0, 8);
+}
+
 async function yasnoAddr(kind, q, ctx) {
   const ids = YASNO_IDS[q.get('op')]; if (!ids) throw new Error('регіон не підтримується');
   const [region, dso] = ids; const B = 'https://app.yasno.ua/api/blackout-service/public/shutdowns/addresses/v2';
@@ -309,6 +330,15 @@ async function yasnoAddr(kind, q, ctx) {
   else if (kind === 'houses') { if (q.get('cityId')) P.set('cityId', q.get('cityId')); P.set('streetId', q.get('streetId')); P.set('query', q.get('q') || ''); }
   else if (kind === 'group') { if (q.get('cityId')) P.set('cityId', q.get('cityId')); P.set('streetId', q.get('streetId')); P.set('houseId', q.get('houseId')); }
   else throw new Error('невідомий запит');
+  // Пошук вулиць/міст: YASNO шукає підрядок і віддає ≤20 збігів, тож «вул Хрещатик», «Лесі Українки» (у YASNO — «Українки Лесі»)
+  // чи російське «улица Победы» напряму не знаходяться. Робимо кілька запитів (ціла фраза без «вул.», кожне слово, українські
+  // варіанти російських літер) і об'єднуємо — далі застосунок сам ранжує.
+  if ((kind === 'streets' || kind === 'cities') && !q.get('raw')) {
+    const variants = yasnoVariants(q.get('q') || '');
+    if (!variants.length) return [];
+    const lists = await Promise.all(variants.map(v => { const n = new URLSearchParams(q); n.set('q', v); n.set('raw', '1'); return yasnoAddr(kind, n, ctx).catch(() => []); }));
+    const seen = new Set(); return lists.flat().filter(x => !seen.has(x.id) && seen.add(x.id)).slice(0, 60);
+  }
   const u = `${B}/${kind}?${P}`; const ck = new Request(`https://cache.electrocity/yasno/${kind}?${P}`);
   const hit = await caches.default.match(ck); if (hit) return hit.json();
   const r = await fetch(u, { headers: { 'User-Agent': UA, Accept: 'application/json' } }); if (!r.ok) throw new Error(`YASNO ${r.status}`);
