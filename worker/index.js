@@ -47,6 +47,8 @@ export default {
       }
       if (p === '/api/outage') { const n = kyiv(); return json(await addressStatus(env, url.searchParams, ctx, `${n.date}T${String(Math.floor(n.min / 60)).padStart(2, '0')}:${String(n.min % 60).padStart(2, '0')}`), 200, { 'Cache-Control': 'public, max-age=120' }); }
       // YASNO (ДТЕК): довідник адрес і група за адресою — Київ (25/902) і Дніпропетровщина (3/301)
+      // Львівобленерго: довідник адрес і черга кожного будинку (power-api.loe.lviv.ua)
+      if (p.startsWith('/api/pw/')) return json(await pwDir(p.slice(8), url.searchParams, ctx), 200, { 'Cache-Control': 'public, max-age=3600' });
       if (p.startsWith('/api/yasno/')) return json(await yasnoAddr(p.slice(11), url.searchParams, ctx), 200, { 'Cache-Control': 'public, max-age=3600' });
       if (p === '/api/dtek/houses') { const r = await dtekHouses(url.searchParams, ctx, env); return json(r, 200, { 'Cache-Control': r.pending ? 'no-store' : 'public, max-age=3600' }); }
       // службові маршрути для GitHub Actions (секрет DTEK_KEY)
@@ -313,5 +315,22 @@ async function yasnoAddr(kind, q, ctx) {
   const j = await r.json();
   const out = kind === 'group' ? { queue: j?.group ? `${j.group}.${j.subgroup || 1}` : null } : (j || []).map(x => ({ id: x.id, label: x.value }));
   ctx.waitUntil(caches.default.put(ck, new Response(JSON.stringify(out), { headers: { 'Cache-Control': `max-age=${kind === 'group' ? 21600 : 86400}` } })));
+  return out;
+}
+
+async function pwDir(kind, q, ctx) {
+  const P = PW[q.get('op')]; if (!P) throw new Error('регіон не підтримується');
+  const path = kind === 'cities' ? '/pw_cities?pagination=false'
+    : kind === 'streets' ? `/pw_streets?pagination=false&city.id=${+q.get('cityId')}`
+    : kind === 'houses' ? `/pw_accounts?pagination=false&city.id=${+q.get('cityId')}&street.id=${+q.get('streetId')}` : null;
+  if (!path) throw new Error('невідомий запит');
+  const ck = new Request(`https://cache.electrocity/pwdir/${q.get('op')}${path}`);
+  const hit = await caches.default.match(ck); if (hit) return hit.json();
+  const r = await fetch(P.api + path, { headers: { 'User-Agent': UA, Accept: 'application/json' } }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json(); const list = Array.isArray(j) ? j : (j['hydra:member'] || []);
+  const out = kind === 'cities' ? list.map(c => ({ id: c.id, label: c.name, sub: c.otg?.name ? `${c.otg.name} громада` : '' }))
+    : kind === 'streets' ? list.map(s => ({ id: s.id, label: s.name }))
+    : list.map(h => ({ label: h.buildingName, queues: h.chergGpv ? [String(h.chergGpv)] : [] }));
+  ctx.waitUntil(caches.default.put(ck, new Response(JSON.stringify(out), { headers: { 'Cache-Control': `max-age=${kind === 'houses' ? 21600 : 604800}` } })));
   return out;
 }
