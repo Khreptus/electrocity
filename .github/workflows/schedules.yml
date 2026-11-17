@@ -17,7 +17,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,6 +32,22 @@ jobs:
           npm i --no-save --no-audit --no-fund playwright@1.48.2
           npx playwright install --with-deps chromium
           for op in ${{ steps.fetch.outputs.need_browser }}; do node scripts/fetch-schedules.mjs "$op" || true; done
+      # Аварії за адресою на сайтах ДТЕК: черга вулиць від сервера → getHomeNum → результат серверу.
+      # Обмін захищено секретом DTEK_KEY (той самий у GitHub Secrets і в Cloudflare Worker). Адреси не потрапляють у репозиторій.
+      - name: Перевірити адреси на сайтах ДТЕК
+        id: addr
+        env:
+          DTEK_KEY: ${{ secrets.DTEK_KEY }}
+        run: node scripts/dtek-addr.mjs || true
+      - name: Перевірити адреси ДТЕК через браузер
+        if: steps.addr.outputs.need_browser_addr != ''
+        env:
+          DTEK_KEY: ${{ secrets.DTEK_KEY }}
+          ONLY_OPS: ${{ steps.addr.outputs.need_browser_addr }}
+        run: |
+          [ -d node_modules/playwright ] || npm i --no-save --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium
+          node scripts/dtek-addr.mjs --browser || true
       - name: Зберегти зміни
         run: |
           git config user.name "electrocity-bot"
