@@ -147,14 +147,17 @@ async function moe({ op, name, url }) {
 const SOURCES = [
   { op: 'dtek-oem', name: 'ДТЕК Одеські електромережі', url: 'https://www.dtek-oem.com.ua/ua/shutdowns', run: dtek },
   { op: 'dtek-dnem', name: 'ДТЕК Дніпровські електромережі', url: 'https://www.dtek-dnem.com.ua/ua/shutdowns', run: dtek },
+  { op: 'dtek-kem', name: 'ДТЕК Київські електромережі', url: 'https://www.dtek-kem.com.ua/ua/shutdowns', run: dtek },
+  { op: 'dtek-krem', name: 'ДТЕК Київські регіональні електромережі', url: 'https://www.dtek-krem.com.ua/ua/shutdowns', run: dtek },
+  { op: 'dtek-dem', name: 'ДТЕК Донецькі електромережі', url: 'https://www.dtek-dem.com.ua/ua/shutdowns', run: dtek },
   { op: 'hoe', name: 'Хмельницькобленерго', url: 'https://hoe.com.ua/page/pogodinni-vidkljuchennja', run: hoe },
   { op: 'moe', name: 'Миколаївобленерго', url: 'https://off.energy.mk.ua/', run: moe },
 ];
 if (process.argv[1]?.endsWith('fetch-schedules.mjs')) {
-const only = process.argv[2];
+const only = process.argv.slice(2);
 await mkdir(OUT, { recursive: true });
 let failed = 0; const needBrowser = [];
-for (const src of SOURCES.filter(s => !only || s.op === only)) {
+for (const src of SOURCES.filter(s => !only.length || only.includes(s.op))) {
   try {
     const data = await src.run(src);
     data.days = keepRecent(data.days);
