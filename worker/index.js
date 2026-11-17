@@ -324,13 +324,14 @@ async function pwDir(kind, q, ctx) {
     : kind === 'streets' ? `/pw_streets?pagination=false&city.id=${+q.get('cityId')}`
     : kind === 'houses' ? `/pw_accounts?pagination=false&city.id=${+q.get('cityId')}&street.id=${+q.get('streetId')}` : null;
   if (!path) throw new Error('невідомий запит');
-  const ck = new Request(`https://cache.electrocity/pwdir/${q.get('op')}${path}`);
+  const ck = new Request(`https://cache.electrocity/pwdir2/${q.get('op')}${path}`);
   const hit = await caches.default.match(ck); if (hit) return hit.json();
   const r = await fetch(P.api + path, { headers: { 'User-Agent': UA, Accept: 'application/json' } }); if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j = await r.json(); const list = Array.isArray(j) ? j : (j['hydra:member'] || []);
   const out = kind === 'cities' ? list.map(c => ({ id: c.id, label: c.name, sub: c.otg?.name ? `${c.otg.name} громада` : '' }))
     : kind === 'streets' ? list.map(s => ({ id: s.id, label: s.name }))
-    : list.map(h => ({ label: h.buildingName, queues: h.chergGpv ? [String(h.chergGpv)] : [] }));
+    : Object.entries(list.reduce((m, h) => { const k = String(h.buildingName || '').trim(); if (k) (m[k] ||= new Set()); if (k && h.chergGpv) m[k].add(String(h.chergGpv)); return m; }, {}))
+        .map(([label, qs]) => ({ label, queues: [...qs] })); // рахунки одного будинку → один будинок (черги об'єднуємо)
   ctx.waitUntil(caches.default.put(ck, new Response(JSON.stringify(out), { headers: { 'Cache-Control': `max-age=${kind === 'houses' ? 21600 : 604800}` } })));
   return out;
 }
