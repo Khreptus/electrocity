@@ -145,11 +145,10 @@ export async function moeAddress({ city, street, house }, nowIso, ctx) {
   return { found: false, at: new Date().toISOString(), items: [] };
 }
 
-// ---------- Платформа «Чому немає світла?» (Львівобленерго, Волиньобленерго) ----------
+// ---------- Платформа «Чому немає світла?» (Львівобленерго) ----------
 // Відкритий API: pw_cities → pw_streets → pw_accidents (аварії) / pw_accident_planeds (планові), фільтр за city.id і street.id.
 export const PW = {
   loe: { api: 'https://power-api.loe.lviv.ua/api', name: 'Львівобленерго', url: 'https://poweron.loe.lviv.ua/' },
-  'voe-volyn': { api: 'https://api-voe-poweron.inneti.net/api', name: 'Волиньобленерго', url: 'https://www.energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni/chomu-nemaie-elektropostachannia/' },
 };
 const pwGet = (base, path) => fetch(`${base}${path}`, { headers: { 'User-Agent': UA, Accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
 async function pwCached(key, ttl, ctx, load) {
