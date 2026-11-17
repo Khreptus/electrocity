@@ -173,10 +173,11 @@ async function soe({ op, name, url }) {
   try { ({ chromium } = await import('playwright')); } catch { throw new Error('NEED_BROWSER'); }
   const b = await chromium.launch();
   try {
-    const p = await b.newPage({ userAgent: UA, locale: 'uk-UA', bypassCSP: true });
+    const p = await b.newPage({ userAgent: UA, locale: 'uk-UA' });
     // Сторінка сама розшифровує дані й розбирає JSON — запам'ятовуємо масив черг, який вона отримала
     await p.addInitScript(() => { const orig = JSON.parse; JSON.parse = function (...a) { const r = orig.apply(this, a); try { const a = Array.isArray(r) ? r : r && (r.data || r.result); if (Array.isArray(a) && a[0] && typeof a[0] === 'object' && 'cherga_n' in a[0]) window.__soe = a; } catch {} return r; }; });
-    await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const resp = await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    if (!resp?.ok()) throw new Error(`Сумиобленерго: сайт відповів HTTP ${resp?.status()}`);
     let list = null; // CSP сайту забороняє eval, тож опитуємо через evaluate, а не waitForFunction
     // 1) масив, який сторінка розібрала з JSON; 2) дані зі стану React-компонента таблиці (якщо розбір іде іншим шляхом)
     const grab = () => {
@@ -191,7 +192,7 @@ async function soe({ op, name, url }) {
       return null;
     };
     for (let i = 0; i < 45 && !list; i++) { list = await p.evaluate(grab); if (!list) await p.waitForTimeout(1000); }
-    if (!list) throw new Error('Сумиобленерго: сторінка не віддала графік за 45 с');
+    if (!list) { const t = (await p.evaluate(() => document.body?.innerText || '')).replace(/\s+/g, ' ').slice(0, 160); throw new Error(`Сумиобленерго: сторінка не віддала графік за 45 с («${t}»)`); }
     return { operator: op, name, source: { url, kind: 'official' }, days: parseSoe(list) };
   } finally { await b.close(); }
 }
