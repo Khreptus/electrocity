@@ -1,0 +1,25 @@
+name: Перевірка джерел графіків
+
+# Щогодини: тести розбору + стан усіх джерел на сервері.
+# Якщо щось зламалося (джерело не читається > 2 год або змінило формат) — запуск падає, і GitHub надсилає лист.
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Тести розбору графіків
+        run: node --test tests/parsers.test.mjs
+      - name: Стан джерел на сервері
+        run: node scripts/health.mjs
