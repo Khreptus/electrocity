@@ -150,6 +150,36 @@ export const AGG = [
   ['voe', 'Вінницяобленерго', 'https://www.voe.com.ua/disconnection/detailed', `${RAW}/vn-progr/gpv-voe-vinnytsia/main/data/Vinnytsiaoblenerho.json`],
   ['dtek-krem', 'ДТЕК Київські регіональні електромережі', 'https://www.dtek-krem.com.ua/ua/shutdowns', `${RAW}/Baskerville42/outage-data-ua/main/data/kyiv-region.json`],
 ];
+
+// Чернівціобленерго: oblenergo.cv.ua/shutdowns/ (сьогодні, лише години від поточної) і /shutdowns/?next (завтра, вся доба).
+// Таблиця: <div id="gsv"><ul><p>17.11.2026</p>…</ul> … <div id="infN" data-id="N"><u>з</u><u>в</u><u>мз</u>…</div> — 48 півгодин.
+// В — відключені, З — заживлені, МЗ — можливо заживлені. Групи 1…12.
+const CV_CELL = { 'в': 'off', 'з': 'on', 'мз': 'possible', 'мв': 'possible' };
+const segsToSlots = segs => { const sl = Array(48).fill('unknown'); for (const [a, b, st] of segs || []) for (let i = a / 30; i < b / 30; i++) sl[i] = st; return sl; };
+export function parseCv(html, prevDays = {}) {
+  const g = html.indexOf('id="gsv"'); if (g < 0) throw new Error('Чернівціобленерго: немає таблиці графіка (формат змінився)');
+  const part = html.slice(g);
+  const dm = part.match(/<p>\s*(\d{2})\.(\d{2})\.(\d{4})/); if (!dm) throw new Error('Чернівціобленерго: дата не розпізнана (формат змінився)');
+  const date = `${dm[3]}-${dm[2]}-${dm[1]}`; const day = {}; let rows = 0;
+  for (const m of part.matchAll(/<div id="inf(\d+)"[^>]*>([\s\S]*?)<\/div>/g)) {
+    const cells = [...m[2].matchAll(/<u[^>]*>([^<]*)<\/u>/g)].map(c => CV_CELL[c[1].trim().toLowerCase()] || 'unknown');
+    if (!cells.length || cells.length > 48) continue;
+    // сторінка «сьогодні» показує лише півгодини від поточної до кінця доби — минуле беремо зі збереженого графіка
+    const sl = segsToSlots(prevDays[date]?.[m[1]]); sl.splice(48 - cells.length, cells.length, ...cells);
+    day[m[1]] = slotsToSegs(sl); rows++;
+  }
+  if (!rows) throw new Error('Чернівціобленерго: групи не розпізнано (формат змінився)');
+  return { date, day };
+}
+const CV = 'https://oblenergo.cv.ua/shutdowns/';
+async function fetchCv(get, prev) {
+  const days = {}; const pd = prev?.days || {};
+  const [a, b] = await Promise.allSettled([get(CV), get(CV + '?next')]);
+  if (a.status === 'rejected' && b.status === 'rejected') throw a.reason;
+  for (const r of [a, b]) if (r.status === 'fulfilled') { const { date, day } = parseCv(r.value, pd); days[date] = day; }
+  return { operator: 'chernoe', name: 'Чернівціобленерго', source: { url: CV, kind: 'official' }, days };
+}
+
 export const SOURCES = [
   { op: 'dtek-oem', fetch: async get => ({ operator: 'dtek-oem', name: 'ДТЕК Одеські електромережі', source: { url: 'https://www.dtek-oem.com.ua/ua/shutdowns', kind: 'official' }, ...parseDtek(await get('https://www.dtek-oem.com.ua/ua/shutdowns')) }) },
   // Сайти ДТЕК (крім Одеси) закриті Incapsula для серверів Cloudflare. Графік з того ж офіційного сайту
@@ -171,6 +201,7 @@ export const SOURCES = [
     const j = JSON.parse(await get(file));
     return { operator: op, name, source: { url, kind: 'aggregator', via: file.replace('https://raw.githubusercontent.com/', 'github.com/').replace(/\/main\/.*$/, '') }, ...parseFact(j.fact) };
   } })),
+  { op: 'chernoe', fetch: (get, prev) => fetchCv(get, prev) },
   { op: 'hoe', fetch: async get => ({ operator: 'hoe', name: 'Хмельницькобленерго', source: { url: 'https://hoe.com.ua/page/pogodinni-vidkljuchennja', kind: 'official' }, ...parseHoe(await get('https://hoe.com.ua/page/pogodinni-vidkljuchennja')) }) },
   { op: 'moe', fetch: async get => { const [a, b, c] = await Promise.all([get(`${MOE}/schedule/time-series`), get(`${MOE}/outage-queue/by-type/3`), get(`${MOE}/v2/schedule/active`)]);
     return { operator: 'moe', name: 'Миколаївобленерго', source: { url: 'https://off.energy.mk.ua/', kind: 'official' }, ...parseMoe(JSON.parse(a), JSON.parse(b), JSON.parse(c)) }; } },

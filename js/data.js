@@ -29,7 +29,7 @@ export const REGIONS = [
   { id: 'kherson', name: 'Херсонська', center: 'Херсон', op: 'khe', opName: 'Херсонобленерго', queues: Q6x2 },
   { id: 'khmelnytskyi', name: 'Хмельницька', center: 'Хмельницький', cities: ['Хмельницький', 'Кам’янець-Подільський', 'Шепетівка', 'Нетішин', 'Старокостянтинів', 'Славута'], op: 'hoe', opName: 'Хмельницькобленерго', queues: Q6x2 },
   { id: 'cherkasy', name: 'Черкаська', center: 'Черкаси', op: 'choe', opName: 'Черкасиобленерго', queues: Q6x2 },
-  { id: 'chernivtsi', name: 'Чернівецька', center: 'Чернівці', op: 'chernoe', opName: 'Чернівціобленерго', queues: Q6x2 },
+  { id: 'chernivtsi', name: 'Чернівецька', center: 'Чернівці', op: 'chernoe', opName: 'Чернівціобленерго', queues: { type: 'plain', groups: 12 } },
   { id: 'chernihiv', name: 'Чернігівська', center: 'Чернігів', op: 'cheroe', opName: 'Чернігівобленерго', queues: Q6x2 },
 ];
 
@@ -57,7 +57,7 @@ export function addDays(dateStr, n) {
 }
 
 // Оператори з підключеними офіційними джерелами
-export const LIVE_OPS = new Set(['dtek-oem', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem', 'hoe', 'moe', 'khoe', 'zoe', 'poe-poltava', 'choe', 'cheroe', 'zhoe', 'loe', 'poe', 'roe', 'toe', 'zakoe', 'voe']);
+export const LIVE_OPS = new Set(['dtek-oem', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem', 'hoe', 'moe', 'khoe', 'zoe', 'poe-poltava', 'choe', 'cheroe', 'zhoe', 'loe', 'poe', 'roe', 'toe', 'zakoe', 'voe', 'chernoe']);
 export const isLive = op => LIVE_OPS.has(op);
 
 // ---------- Завантаження графіка ----------

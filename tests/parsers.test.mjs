@@ -2,7 +2,7 @@
 // Запуск: node --test tests/  (у GitHub Actions — на кожен push; деплой з помилкою не пройде перевірку)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHoe, hoeDate, parseFact, parseYasno } from '../worker/sources.js';
+import { parseHoe, hoeDate, parseFact, parseYasno, parseCv } from '../worker/sources.js';
 
 const Y = new Date().getFullYear();
 const off = (segs) => segs.filter(s => s[2] === 'off').map(s => [s[0], s[1]]);
@@ -62,4 +62,22 @@ test('YASNO: слоти, «очікуємо графік» пропускаєт�
   const r = parseYasno({ '1.1': { today: { date: '2026-11-17T00:00:00+02:00', status: 'ScheduleApplies', slots: [{ start: 0, end: 240, type: 'NotPlanned' }, { start: 240, end: 510, type: 'Definite' }, { start: 510, end: 1440, type: 'NotPlanned' }] }, tomorrow: { date: '2026-11-18T00:00:00+02:00', status: 'WaitingForSchedule', slots: [] } } });
   assert.deepEqual(off(r.days['2026-11-17']['1.1']), [[240, 510]]);
   assert.equal(r.days['2026-11-18'], undefined);
+});
+
+const CVH = (date, rows) => `<div id="gsv" highlight="0"><ul><p>${date} </p><li id="grp1" data-id="1">Група<b>1</b></li></ul><div><p><u class="active"><b>22<em>:00</em></b></u></p>` + rows.map((r, i) => `<div id="inf${i + 1}" data-id="${i + 1}">${r.map(c => `<u>${c}</u>`).join('')}</div>`).join('') + '</div></div>';
+test('Чернівці: завтра, вся доба, В/З/МЗ', () => {
+  const row = Array(48).fill('з'); row[12] = row[13] = 'в'; row[14] = 'мз';
+  const r = parseCv(CVH('18.11.2026', [row, Array(48).fill('з')]));
+  assert.equal(r.date, '2026-11-18');
+  assert.deepEqual(off(r.day['1']), [[360, 420]]);
+  assert.ok(r.day['1'].some(s => s[2] === 'possible' && s[0] === 420));
+  assert.deepEqual(off(r.day['2']), []);
+});
+test('Чернівці: сьогодні — лише залишок доби, минуле зі збереженого', () => {
+  const prev = { '2026-11-17': { '1': [[0, 120, 'off'], [120, 1440, 'on']] } };
+  const r = parseCv(CVH('17.11.2026', [['з', 'з', 'в', 'в']]), prev);
+  assert.deepEqual(off(r.day['1']), [[0, 120], [1380, 1440]]);
+});
+test('Чернівці: незнайома сторінка — помилка', () => {
+  assert.throws(() => parseCv('<html>нічого</html>'), /формат змінився/);
 });

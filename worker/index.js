@@ -97,7 +97,7 @@ async function tick(env, manual = false) {
     const prev = prevTxt ? JSON.parse(prevTxt) : null;
     data[src.op] = prev;
     try {
-      const fresh = await src.fetch(fetchText);
+      const fresh = await src.fetch(fetchText, prev);
       const days = Object.fromEntries(Object.entries(fresh.days).filter(([d]) => d >= now.date).sort());
       if (!Object.keys(days).length) {
         // джерело працює, але чинного графіка немає — зберігаємо порожній запис (раз), щоб застосунок не показував демо
