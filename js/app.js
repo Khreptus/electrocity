@@ -1,6 +1,6 @@
 import { setLang, LANGS, detectLang, locale, tr } from './i18n.js';
 import { ic, STATE_ICON } from './icons.js';
-import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, skel, isYasno, yasnoGroup, isPw } from './address.js';
+import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, FILE_ADDR, skel, isYasno, yasnoGroup, isPw } from './address.js';
 import { API, API_READY } from './config.js';
 import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr, freeDay } from './data.js';
 
@@ -350,6 +350,7 @@ function regionMatch(x, q) {
   return (' ' + skel(hay)).includes(' ' + sq); // з початку слова, можна кілька слів («Кривой Рог»)
 }
 function manualReason(r) {
+  if (r.op === 'chernoe') return 'Група визначається за офіційними списками адрес Чернівціобленерго — оберіть населений пункт, вулицю й будинок зі списку підказок.';
   if (r.op === 'hoe') return 'Черга визначається за офіційними списками адрес Хмельницькобленерго — оберіть населений пункт, вулицю й будинок зі списку підказок. Якщо адреси там немає, перевірте чергу на hoe.com.ua → «Перевірити чергу» і оберіть її тут.';
   if (r.op.startsWith('dtek-')) return 'Автовизначення черги для ДТЕК з’явиться після підключення сервера (вже в плані). Поки що черга вказана на сайті ДТЕК у розділі «Відключення» за вашою адресою.';
   if (r.addressLookup === 'moe') return 'Оберіть населений пункт, вулицю й будинок зі списку підказок — тоді черга визначиться автоматично.';
@@ -371,7 +372,7 @@ function onboarding() {
     <button class="opt" data-act="method" data-v="address" aria-pressed="${draft.method === 'address'}"><span class="ot">${ic('map-pin')}</span><span><span class="h-s">За адресою</span><br><span class="body-s">Вкажіть вулицю й будинок — чергу визначимо автоматично, щойно оператор це підтримає</span></span></button>
     <button class="opt" data-act="method" data-v="queue" aria-pressed="${draft.method === 'queue'}"><span class="ot">${ic('grid')}</span><span><span class="h-s">Я знаю свою чергу</span><br><span class="body-s">Оберіть чергу або підчергу зі списку оператора</span></span></button>
     <div style="flex:1"></div><button class="btn primary" data-act="method-next">Продовжити</button></section>`;
-  if (view === 'ob-address') { const auto = (r.addressLookup === 'moe' && draft.nsId) || dtekAuto(r) || isYasno(r) || (isPw(r) && draft.pwCity) || (r.op === 'hoe' && draft.hoeId); return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
+  if (view === 'ob-address') { const auto = (r.addressLookup === 'moe' && draft.nsId) || dtekAuto(r) || isYasno(r) || (isPw(r) && draft.pwCity) || (FILE_ADDR.has(r.op) && draft.hoeId); return bk('ob-method') + `<section class="sheet r32">${steps(4)}<div class="cap">${esc(draft.city)} · ${esc(r.opName)}</div>
     <label class="field">${ic('search')}<input id="street" placeholder="Вулиця — почніть вводити" value="${esc(draft.street || '')}" autocomplete="off" enterkeyhint="next"></label>
     <label class="field">${ic('home')}<input id="house" placeholder="Номер будинку" value="${esc(draft.house || '')}" autocomplete="off" enterkeyhint="done"></label>
     <div id="addr-res"></div>
@@ -612,7 +613,7 @@ function initAddress() {
       if (it.yasnoHouse) { res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Шукаємо чергу для адреси…</div></div>`;
         return yasnoGroup(r.op, draft.streetId, it.yasnoHouse, draft.yasnoCity).then(q => q ? found(q, 'YASNO') : notFound('YASNO не повернув групу для цього будинку.')).catch(() => notFound('Сервіс YASNO зараз не відповідає.')); }
       if (it.id) return lookup(it.id);
-      if (it.queues) { const qs = [...new Set(it.queues.filter(x => /^\d\.\d$/.test(x)))];
+      if (it.queues) { const qok = new Set(queueList(r.queues)); const qs = [...new Set(it.queues.map(x => String(x).trim()).filter(x => qok.has(x)))];
         if (!qs.length) return notFound('Оператор не вказав чергу для цього будинку.');
         if (qs.length === 1) return found(qs[0], r.opName);
         draft.autoQueue = false; next.textContent = 'Обрати чергу вручну';
@@ -621,7 +622,7 @@ function initAddress() {
     }, { minChars: 0, emptyText: 'Такого номера немає в довіднику оператора' }); };
   attachTypeahead(st, streetSource(r, draft), it => { draft.street = it.label; draft.streetId = it.id || null; draft.house = ''; hs.value = ''; res.innerHTML = ''; draft.autoQueue = false; setupHouse(); hs.focus();
     if (dtekAuto(r)) import('./address.js').then(m => m.dtekHouses(r.op, draft.city, draft.street)).catch(() => notFound('Сервіс ДТЕК зараз не відповідає.'));
-    if (r.op === 'hoe' && draft.hoeId) hoeStreetQueue(draft).then(qs => { if (qs?.length) found(qs[0], r.opName); }).catch(() => {}); }, { minChars: draft.nsId ? 0 : 1 });
+    if (FILE_ADDR.has(r.op) && draft.hoeId) hoeStreetQueue(r.op, draft).then(qs => { if (qs?.length) found(qs[0], r.opName); }).catch(() => {}); }, { minChars: draft.nsId ? 0 : 1 });
   st.addEventListener('input', () => { draft.streetId = null; draft.autoQueue = false; res.innerHTML = ''; });
   setupHouse();
   if (!draft.street) st.focus();

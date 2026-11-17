@@ -1,6 +1,6 @@
-name: Адреси Хмельницькобленерго
+name: Довідники адрес обленерго
 
-# Довідник «адреса → черга» з офіційних xlsx-файлів обленерго.
+# Довідники «адреса → черга»: Хмельницькобленерго (офіційні xlsx), Чернівціобленерго (сторінки пошуку групи).
 # Файли оновлюються рідко, тож перевіряємо раз на тиждень (і можна запустити вручну).
 on:
   schedule:
@@ -25,13 +25,15 @@ jobs:
           node-version: 20
       - name: Встановити xlsx
         run: npm i --no-save --no-audit --no-fund https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
-      - name: Зібрати довідник
-        run: node scripts/hoe-addr.mjs
+      - name: Хмельницькобленерго
+        run: node scripts/hoe-addr.mjs || echo "::warning::Хмельницькобленерго — не вдалося"
+      - name: Чернівціобленерго
+        run: node scripts/cv-addr.mjs || echo "::warning::Чернівціобленерго — не вдалося"
       - name: Зберегти зміни
         run: |
           git config user.name "electrocity-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add -A data/addr/hoe
+          git add -A data/addr/hoe data/addr/chernoe
           if git diff --cached --quiet; then echo "Без змін"; exit 0; fi
-          git commit -m "Адреси Хмельницькобленерго $(TZ=Europe/Kyiv date '+%d.%m.%Y')"
+          git commit -m "Довідники адрес $(TZ=Europe/Kyiv date '+%d.%m.%Y')"
           git pull --rebase origin main && git push
