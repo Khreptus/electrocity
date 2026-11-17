@@ -43,12 +43,15 @@ async function load() {
   }
 }
 // аварійні й планові відключення саме за цією адресою
+let ADDR_OK = false; // перевірку адреси пройдено: будинок знайдено, подій немає
 async function loadAddr() {
   if (PARAM || !P.street || !P.house || !ADDR_OPS.includes(OP)) return [];
   try {
     const q = Object.entries({ op: OP, city: P.city || '', street: P.street, house: P.house }).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     const r = new Request(`${BASE}api/outage?${q}`); r.timeoutInterval = 12; const j = await r.loadJSON();
-    return (j?.items || []).filter(it => it.kind !== 'schedule');
+    const items = (j?.items || []).filter(it => it.kind !== 'schedule');
+    ADDR_OK = !!(j?.ok && j.supported && j.found !== false && !items.length);
+    return items;
   } catch { return []; }
 }
 const isoMin = iso => +iso.slice(11, 13) * 60 + +iso.slice(14, 16);
@@ -74,7 +77,8 @@ async function img(name) {
 
 function analyse(data, items = []) {
   const now = kyiv(); const tm = addDays(now.date, 1);
-  const today = overlay(data?.days?.[now.date]?.[QUEUE], items, now.date), tom = overlay(data?.days?.[tm]?.[QUEUE], items, tm);
+  let today = overlay(data?.days?.[now.date]?.[QUEUE], items, now.date); const tom = overlay(data?.days?.[tm]?.[QUEUE], items, tm);
+  let byAddr = false; if (!today && ADDR_OK) { today = [[0, 1440, 'on']]; byAddr = true; } // графіка немає, за адресою подій немає — світло є
   if (!today) return { state: 'unknown', now, today, tom };
   const cur = today.find(s => now.min >= s[0] && now.min < s[1]);
   if (!cur) return { state: 'unknown', now, today, tom };
@@ -84,7 +88,7 @@ function analyse(data, items = []) {
   for (let k = i + 1; k < all.length; k++) { if (all[k][2] === 'unknown') break; if (isOff(all[k][2]) !== isOff(cur[2])) { next = all[k][0]; break; } }
   let eod = false; if (next == null && cur[1] === 1440 && !tom) { next = 1440; eod = true; } // графіка на завтра ще немає — до кінця доби
   const midnight = new Date(Date.now() - now.min * 60000);
-  return { state: cur[2], now, today, tom, next, eod, nextDate: next != null ? new Date(midnight.getTime() + next * 60000) : null };
+  return { state: cur[2], now, today, tom, next, eod, byAddr, nextDate: next != null ? new Date(midnight.getTime() + next * 60000) : null };
 }
 
 // ---------- шкала доби ----------
@@ -134,7 +138,7 @@ async function build() {
   const ft = w.addStack();
   const f1 = ft.addText(a.eod ? 'завтра: графіка ще немає' : a.nextDate ? `${isOff(a.state) ? 'світло о' : 'відкл. о'} ${hm(a.next)}` : ''); f1.font = Font.mediumMonospacedSystemFont(10); f1.textColor = C.text2;
   ft.addSpacer();
-  const f2 = ft.addText(a.state === 'emergency' ? 'за адресою' : data?.demo ? 'демо' : cached ? 'офлайн' : 'за графіком'); f2.font = Font.mediumSystemFont(10); f2.textColor = C.text3;
+  const f2 = ft.addText(a.state === 'emergency' || a.byAddr ? 'за адресою' : data?.demo ? 'демо' : cached ? 'офлайн' : 'за графіком'); f2.font = Font.mediumSystemFont(10); f2.textColor = C.text3;
 
   // оновлення: на момент зміни статусу або через 15 хв
   const in15 = new Date(Date.now() + 15 * 60000);

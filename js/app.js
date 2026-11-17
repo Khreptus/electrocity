@@ -86,7 +86,13 @@ function overlaySegs(segs, items, d) {
 // Дані за адресою з кешу (синхронно) — щоб шкала одразу малювалась з аваріями, без мигання
 const addrKey = a => [region(a.regionId)?.op, a.city, a.street, a.house].join('|');
 const addrItemsCached = a => (addrCache[addrKey(a)]?.j?.items || []).filter(it => it.kind !== 'schedule');
-const withAddr = (a, segs, d) => overlaySegs(segs, addrItemsCached(a), d) || segs;
+// Перевірка адреси на сайті обленерго пройшла і нічого не знайшла (будинок знайдено, подій немає)
+const addrClear = a => { const j = addrCache[addrKey(a)]?.j; return !!(j?.ok && j.supported && j.found !== false && !(j.items || []).some(it => it.kind !== 'schedule')); };
+// Графіка на сьогодні немає, а за адресою подій не зареєстровано — вважаємо, що світло є
+const withAddr = (a, segs, d) => {
+  if (!segs && d === kyivNow().date && addrClear(a)) { const s = [[0, 1440, 'on']]; s.none = true; s.byAddr = true; return s; }
+  return overlaySegs(segs, addrItemsCached(a), d) || segs;
+};
 const addrInflight = {};
 // Завантажити стан адреси (кеш 2 хв); повертає true, якщо дані змінилися
 function fetchAddr(a) {
@@ -157,13 +163,18 @@ async function sidebar() {
 // ----- Головна -----
 function heroInfo(data, a) {
   const { date, min } = kyivNow();
-  const segs = segmentsFor(data, date, a.queue);
+  const raw = segmentsFor(data, date, a.queue);
+  const segs = raw || withAddr(a, raw, date);
   const s = stateAt(segs, min);
   if (!s) return { state: 'unknown', title: 'Статус невідомий', sub: 'Немає даних для черги ' + a.queue + ' на сьогодні', note: 'Час наступної зміни невідомий' };
   const st = s[2];
   const nc = nextChange(data, date, a.queue, min);
   const q = 'Черга ' + a.queue;
   const base = { state: st, nc, min };
+  if (segs.byAddr) {
+    const at = addrCache[addrKey(a)]?.j?.checkedAt; const t2 = at ? new Date(at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
+    return { ...base, nc: null, title: 'Світло є', sub: `${q} · графік не опубліковано`, note: `Аварій і планових робіт за адресою немає${t2 ? ` · перевірено о ${t2}` : ''}`, srcTxt: 'За даними обленерго для вашої адреси' };
+  }
   if (st === 'on' && freeDay(segs)) {
     const sub = `${q} · ${segs.none ? 'графіків відключень не застосовують' : 'на сьогодні відключень не заплановано'}`;
     const note = nc ? `Наступне відключення — завтра о ${hm(nc.at - 1440)}` : 'Світло за графіком до кінця доби';
