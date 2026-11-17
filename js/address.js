@@ -67,7 +67,7 @@ const uniq = (arr, k) => { const s = new Set(); return arr.filter(x => { const v
 export const YASNO_OPS = new Set(['dtek-kem', 'dtek-dnem']);
 export const isYasno = region => YASNO_OPS.has(region.op) && API_READY;
 const yq = (kind, params) => fetch(`${API}api/yasno/${kind}?${new URLSearchParams(params)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
-export const yasnoGroup = (op, streetId, houseId) => yq('group', { op, streetId, houseId }).then(j => j.queue);
+export const yasnoGroup = (op, streetId, houseId, cityId) => yq('group', { op, streetId, houseId, ...(cityId ? { cityId } : {}) }).then(j => j.queue);
 
 // ---------- Публічні джерела для онбордингу ----------
 export function citySource(region) {
@@ -134,7 +134,7 @@ export async function dtekHouses(op, city, street) {
 export const dtekAuto = region => region.op.startsWith('dtek-') && !YASNO_OPS.has(region.op) && API_READY;
 
 export function houseSource(region, draft) {
-  if (isYasno(region) && draft.streetId) return async q => rank((await yq('houses', { op: region.op, streetId: draft.streetId, q })).map(x => ({ label: x.label, yasnoHouse: x.id })), q).slice(0, 40);
+  if (isYasno(region) && draft.streetId) return async q => rank((await yq('houses', { op: region.op, streetId: draft.streetId, q, ...(draft.yasnoCity ? { cityId: draft.yasnoCity } : {}) })).map(x => ({ label: x.label, yasnoHouse: x.id })), q).slice(0, 40);
   if (dtekAuto(region) && draft.street) return async q => {
     const d = await dtekHouses(region.op, draft.city, draft.street);
     return rank(Object.entries(d.houses).map(([label, qs]) => ({ label, queues: qs })), q).slice(0, 40);

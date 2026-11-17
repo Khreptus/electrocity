@@ -610,7 +610,7 @@ function initAddress() {
     if (houseSrc && !houseTA) houseTA = attachTypeahead(hs, q => houseSrc ? houseSrc(q) : Promise.resolve([]), it => {
       draft.house = it.label;
       if (it.yasnoHouse) { res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Шукаємо чергу для адреси…</div></div>`;
-        return yasnoGroup(r.op, draft.streetId, it.yasnoHouse).then(q => q ? found(q, 'YASNO') : notFound('YASNO не повернув групу для цього будинку.')).catch(() => notFound('Сервіс YASNO зараз не відповідає.')); }
+        return yasnoGroup(r.op, draft.streetId, it.yasnoHouse, draft.yasnoCity).then(q => q ? found(q, 'YASNO') : notFound('YASNO не повернув групу для цього будинку.')).catch(() => notFound('Сервіс YASNO зараз не відповідає.')); }
       if (it.id) return lookup(it.id);
       if (it.queues) { const qs = [...new Set(it.queues.filter(x => /^\d\.\d$/.test(x)))];
         if (!qs.length) return notFound('Оператор не вказав чергу для цього будинку.');

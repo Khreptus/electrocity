@@ -304,8 +304,8 @@ async function yasnoAddr(kind, q, ctx) {
   const P = new URLSearchParams({ regionId: region, dsoId: dso });
   if (kind === 'cities') P.set('query', q.get('q') || '');
   else if (kind === 'streets') { P.set('query', q.get('q') || ''); if (q.get('cityId')) P.set('cityId', q.get('cityId')); }
-  else if (kind === 'houses') { P.set('streetId', q.get('streetId')); P.set('query', q.get('q') || ''); }
-  else if (kind === 'group') { P.set('streetId', q.get('streetId')); P.set('houseId', q.get('houseId')); }
+  else if (kind === 'houses') { if (q.get('cityId')) P.set('cityId', q.get('cityId')); P.set('streetId', q.get('streetId')); P.set('query', q.get('q') || ''); }
+  else if (kind === 'group') { if (q.get('cityId')) P.set('cityId', q.get('cityId')); P.set('streetId', q.get('streetId')); P.set('houseId', q.get('houseId')); }
   else throw new Error('невідомий запит');
   const u = `${B}/${kind}?${P}`; const ck = new Request(`https://cache.electrocity/yasno/${kind}?${P}`);
   const hit = await caches.default.match(ck); if (hit) return hit.json();
