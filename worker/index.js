@@ -85,6 +85,7 @@ export default {
 async function tick(env, manual = false) {
   const now = kyiv();
   const status = {};
+  const prevStatus = JSON.parse(await env.KV.get('status') || '{}');
   const changes = [];
   const data = {};
   await Promise.all(SOURCES.map(async src => {
@@ -110,8 +111,12 @@ async function tick(env, manual = false) {
         data[src.op] = next;
         if (prev) changes.push(...diff(src.op, prev.days, days, now));
       }
-      status[src.op] = { ok: true, at: new Date().toISOString() };
-    } catch (e) { status[src.op] = { ok: false, error: String(e.message || e).slice(0, 120), at: new Date().toISOString() }; }
+      status[src.op] = { ok: true, at: new Date().toISOString(), ...(fresh.problems?.length ? { warn: `частину днів не розпізнано: ${fresh.problems.join(', ')}` } : {}) };
+    } catch (e) {
+      const ps = prevStatus[src.op]; const at = new Date().toISOString();
+      // since — з якого часу джерело не читається (для моніторингу: лист, якщо довше 2 год)
+      status[src.op] = { ok: false, error: String(e.message || e).slice(0, 160), at, since: ps && ps.ok === false ? (ps.since || ps.at) : at };
+    }
   }));
   // статус пишемо рідко (ліміт записів KV): раз на 30 хв або при помилці
   if (now.min % 30 === 0 || Object.values(status).some(s => !s.ok)) await env.KV.put('status', JSON.stringify(status)).catch(() => {});

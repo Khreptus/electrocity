@@ -38,33 +38,61 @@ export function parseFact(fact) {
 const MONTHS = { 'січня': 1, 'лютого': 2, 'березня': 3, 'квітня': 4, 'травня': 5, 'червня': 6, 'липня': 7, 'серпня': 8, 'вересня': 9, 'жовтня': 10, 'листопада': 11, 'грудня': 12 };
 const htmlToText = h => h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<br\s*\/?>|<\/p>|<\/div>|<\/li>/gi, '\n').replace(/<[^>]+>/g, ' ')
   .replace(/&nbsp;/g, ' ').replace(/&ndash;|&#8211;/g, '–').replace(/&mdash;|&#8212;/g, '—').replace(/&laquo;/g, '«').replace(/&raquo;/g, '»').replace(/&amp;/g, '&').replace(/[ \t]+/g, ' ');
+// Хмельницькобленерго: текст «За розпорядженням … <дата> … Підчерга 1.1 – 06:00-10:00; 14:00-18:00.»
+// Розбір терпимий до формату: дата словами чи цифрами (з роком чи без), різні тире, «з … до …», крапка/двокрапка в часі,
+// «Підчерга»/«черга»/просто «1.1», «24:00». Якщо блок з датою містить години, але жодної черги не розпізнано — це помилка
+// (застосунок збереже попередній графік, а моніторинг повідомить).
+const DASH = '[-–—−‐‑]';
+const TIME = String.raw`(\d{1,2})[:.](\d{2})`;
+const RANGE = new RegExp(String.raw`(?:з\s*)?${TIME}\s*(?:${DASH}|до|по)\s*${TIME}`, 'gi');
+const QLINE = new RegExp(String.raw`(?:^|\n|[;.]\s*)\s*(?:під)?(?:черга|черги)?\s*№?\s*(\d)\s*[.,]\s*(\d)\s*(?:${DASH}|:|—)?\s*([^\n]*)`, 'gi');
+export function hoeDate(part, today) {
+  const year = +today.slice(0, 4), curMon = +today.slice(5, 7);
+  const head = part.slice(0, 400);
+  const fix = (d, mon, y) => {
+    if (!y) { y = year; if (mon === 1 && curMon === 12) y++; else if (mon === 12 && curMon === 1) y--; }
+    if (y < 100) y += 2000;
+    if (!(mon >= 1 && mon <= 12 && d >= 1 && d <= 31)) return null;
+    return `${y}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+  let m = head.match(/(\d{1,2})\s*[./]\s*(\d{1,2})\s*[./]\s*(\d{2,4})/); if (m) return fix(+m[1], +m[2], +m[3]);
+  m = head.match(/(\d{1,2})\s+(січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|жовтня|листопада|грудня)(?:\s+(\d{4}))?/i); if (m) return fix(+m[1], MONTHS[m[2].toLowerCase()], m[3] ? +m[3] : 0);
+  m = head.match(/(?:^|\D)(\d{1,2})\.(\d{2})(?!\s*[-–—:.]\s*\d)(?:\D|$)/); if (m) return fix(+m[1], +m[2], 0); // «18.11» без року (не час)
+  return null;
+}
 export function parseHoe(html) {
-  // беремо лише фрагмент з графіками — менше роботи для CPU
-  const a = html.indexOf('За розпорядженням'); if (a < 0) throw new Error('Хмельницькобленерго: графіків на сторінці немає');
-  const text = htmlToText(html.slice(a, a + 20000));
-  const today = kyivDate(new Date()); const year = +today.slice(0, 4), curMon = +today.slice(5, 7);
-  const days = {};
-  for (const part of text.split(/(?=За розпорядженням)/)) {
-    // дата: «18.11.2026» (новий формат) або «18 листопада» (старий)
-    const dn = part.slice(0, 300).match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-    const m = dn ? null : part.match(/(\d{1,2})\s+(січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|жовтня|листопада|грудня)/); if (!dn && !m) continue;
-    let date;
-    if (dn) date = `${dn[3]}-${dn[2].padStart(2, '0')}-${dn[1].padStart(2, '0')}`;
-    else { const mon = MONTHS[m[2]]; let y = year; if (mon === 1 && curMon === 12) y++; else if (mon === 12 && curMon === 1) y--; date = `${y}-${String(mon).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`; }
-    if (days[date]) continue;
-    const lines = [...part.matchAll(/Підчерга\s+(\d\.\d)\s*[–—-]\s*([^\n]+)/g)];
-    const notApplied = /не\s+(будуть\s+)?застосов/i.test(part) && !lines.length;
-    if (!lines.length && !notApplied) continue;
+  const a = html.search(/За\s+розпорядженням|графік[иі]?\s+погодинних|Підчерга\s+\d/i); if (a < 0) throw new Error('Хмельницькобленерго: графіків на сторінці немає');
+  const text = htmlToText(html.slice(Math.max(0, a - 200), a + 30000));
+  const today = kyivDate(new Date());
+  const days = {}; const problems = [];
+  for (const part of text.split(/(?=За\s+розпорядженням)/i)) {
+    const date = hoeDate(part, today); if (!date || days[date]) continue;
+    // хвіст рядка обрізаємо на початку наступної черги (кілька черг можуть бути в одному абзаці)
+    const cut = r => r.split(/(?:під)?черга\s*№?\s*\d|(?:^|[\s;])\d\s*[.,]\s*\d\s*[-–—:]\s*(?=[\dз])/i)[0];
+    // кожна черга — з нового рядка (навіть якщо на сайті вони в одному абзаці)
+    const norm = part.replace(/(?=(?:під)?черга\s*№?\s*\d\s*[.,]\s*\d)/gi, '\n').replace(/([.;])\s+(?=\d\s*[.,]\s*\d\s*[-–—:]\s*[\dз])/gi, '$1\n');
+    const lines = [...norm.matchAll(QLINE)].map(([, g, sub, rest]) => [`${g}.${sub}`, cut(rest)]).filter(([q]) => SUBQ.includes(q));
+    const notApplied = /не\s+(будуть\s+)?застосов|скасован/i.test(part) && !lines.length;
+    if (!lines.length) {
+      if (notApplied) { days[date] = Object.fromEntries(SUBQ.map(q => [q, [[0, 1440, 'on']]])); continue; }
+      if (RANGE.test(part)) problems.push(date); RANGE.lastIndex = 0; // години є, а черг не знайшли — формат змінився
+      continue;
+    }
     const day = Object.fromEntries(SUBQ.map(q => [q, [[0, 1440, 'on']]]));
-    for (const [, q, ranges] of lines) {
-      const sl = Array(48).fill('on');
-      for (const r of ranges.matchAll(/(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})/g)) { const s = toMin(r[1]), e = toMin(r[2]) || 1440; for (let t = s; t < (e > s ? e : 1440); t += 30) sl[Math.floor(t / 30)] = 'off'; }
-      day[q] = slotsToSegs(sl);
+    for (const [q, rest] of lines) {
+      const sl = Array(48).fill('on'); let any = false;
+      for (const r of rest.matchAll(RANGE)) {
+        const s = +r[1] * 60 + +r[2], e0 = +r[3] * 60 + +r[4], e = e0 === 0 || e0 > 1440 ? 1440 : e0;
+        if (s >= 1440) continue; any = true;
+        for (let t = s; t < (e > s ? e : 1440); t += 30) sl[Math.floor(t / 30)] = 'off';
+      }
+      if (any || /немає|без\s+відключ/i.test(rest)) day[q] = slotsToSegs(sl);
     }
     days[date] = day;
   }
+  if (problems.length && !Object.keys(days).length) throw new Error(`Хмельницькобленерго: формат змінився, не розпізнано (${problems.join(', ')})`);
   if (!Object.keys(days).length) throw new Error('Хмельницькобленерго: не розпізнано');
-  return { days };
+  return { days, problems };
 }
 
 export function parseMoe(ts, queues, active) {
