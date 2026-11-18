@@ -132,3 +132,11 @@ test('Чернівці: рядки аварійних/планових відк�
   const r = cvRows('<tbody><tr><td>2026-11-06 11:51:54</td><td>Чернівецький</td><td>м. <b>Чернівці</b></td><td><b>вул</b>. ГАЙСИНСЬКА,<br><span>буд. 5, буд. 15, буд. 9А</span></td><td>2026-11-19 09:00:00</td><td>2026-11-19 20:00:00</td></tr></tbody>');
   assert.deepEqual(r[0], { place: 'м. Чернівці', street: 'вул. ГАЙСИНСЬКА', houses: '5, 15, 9А', start: '2026-11-19T09:00', end: '2026-11-19T20:00' });
 });
+
+import { poeQueue, poeItems } from '../worker/outages.js';
+test('Полтава: черга й відключення будинку', () => {
+  const info = { fn_accident_message: 'зареєстрована перерва в електропостачанні внаслідок застосування графіку погодинних відключень (ГПВ)  17.11.2026 р. з 23 годин(и)', message_type: 4, accident_str: '17.11.2026 23:30', gav_message: '…', gp_qnum_1: '1', gp_qnum_2: '2', planned_message: null };
+  assert.equal(poeQueue(info), '1.2');
+  assert.deepEqual(poeItems(info).map(i => [i.kind, i.reason, i.start]), [['planned', 'Графік погодинних відключень', '2026-11-17T23:30']]);
+  assert.deepEqual(poeItems({ message_type: 0, fn_accident_message: 'декілька підключень', gp_qnum_1: '', gp_qnum_2: '' }), []);
+});

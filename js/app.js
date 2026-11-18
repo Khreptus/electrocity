@@ -57,7 +57,7 @@ async function render() {
 }
 
 // ---------- Стан за конкретною адресою: аварійні й планові відключення ----------
-const ADDR_OPS = new Set(['chernoe', 'choe', 'hoe', 'dtek-oem', 'moe', 'loe', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem']);
+const ADDR_OPS = new Set(['poe-poltava', 'chernoe', 'choe', 'hoe', 'dtek-oem', 'moe', 'loe', 'dtek-dnem', 'dtek-kem', 'dtek-krem', 'dtek-dem']);
 const addrCache = {};
 const isoHM = iso => iso ? iso.slice(11, 16) : '…';
 const isoDM = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : '';
@@ -636,6 +636,11 @@ function initAddress() {
       draft.house = it.label;
       if (it.yasnoHouse) { res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Шукаємо чергу для адреси…</div></div>`;
         return yasnoGroup(r.op, draft.streetId, it.yasnoHouse, draft.yasnoCity).then(q => q ? found(q, 'YASNO') : notFound('YASNO не повернув групу для цього будинку.')).catch(() => notFound('Сервіс YASNO зараз не відповідає.')); }
+      // черга будинку на сервері оператора (Полтаваобленерго): питаємо при виборі будинку
+      if (it.remote) { res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Шукаємо чергу для адреси…</div></div>`;
+        return import('./address.js').then(m => m.pq('queue', { op: r.op, cityId: draft.pwCity, streetId: draft.streetId, house: it.label }))
+          .then(x => x.queue ? found(x.queue, r.opName) : notFound(x.multi ? 'За цією адресою кілька підключень (багатоквартирний будинок) — оператор не називає одну чергу. Оберіть свою вручну.' : 'Оператор не вказав чергу для цього будинку.'))
+          .catch(() => notFound('Сайт оператора зараз не відповідає.')); }
       if (it.id) return lookup(it.id);
       if (it.queues) { const qok = new Set(queueList(r.queues)); const qs = [...new Set(it.queues.map(x => String(x).trim()).filter(x => qok.has(x)))];
         if (!qs.length) return notFound('Оператор не вказав чергу для цього будинку.');

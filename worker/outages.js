@@ -355,6 +355,54 @@ export async function cvAddress({ city, street, house }, nowIso, ctx) {
   return { found: true, at: new Date().toISOString(), items: uniq.sort((a, b) => (a.start || '').localeCompare(b.start || '')) };
 }
 
+
+// ---------- Полтаваобленерго: черга й відключення за адресою ----------
+// poe.pl.ua/customs/search-disconnection-cabinet.php (POST disconn={operation_type: city|street|building, filial_id, city_id, street_id})
+// і disconnectinforesult-cabinet.php (disconn={cityid, streerid, house}) → [{ fn_accident_message, message_type, accident_str,
+// gav_message, gp_qnum_1, gp_qnum_2, planned_message }]. Це відкритий пошук сайту «Інформація про перерви в електропостачанні».
+const POE = 'https://www.poe.pl.ua/customs/';
+export const POE_FIL = [['102', 'Великокохнівська'], ['103', 'Гадяцька'], ['104', 'Глобинська'], ['112', 'Горішньоплавнівська'], ['105', 'Гребінківська'], ['106', 'Диканська'], ['108', 'Зінківська'], ['109', 'Карлівська'], ['110', 'Кобеляцька'], ['111', 'Козельщинська'], ['113', 'Котелевська'], ['114', 'Красногорівська'], ['115', 'Кременчуцька'], ['116', 'Лохвицька'], ['117', 'Лубенська'], ['118', 'Машівська'], ['119', 'Миргородська'], ['120', 'Новосанжарська'], ['121', 'Оржицька'], ['122', 'Пирятинська'], ['131', 'Полтавська (райони)'], ['123', 'Полтавська'], ['124', 'Решетилівська'], ['125', 'Семенівська'], ['126', 'Хорольська'], ['127', 'Чорнухинська'], ['128', 'Чутівська'], ['129', 'Шишацька']];
+export async function poePost(file, obj) {
+  const r = await fetch(POE + file, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' }, body: new URLSearchParams({ disconn: JSON.stringify(obj) }) });
+  if (!r.ok) throw new Error(`Полтаваобленерго: HTTP ${r.status}`); return r.json();
+}
+const poeName = s => String(s || '').replace(/^місто\s+/i, 'м. ').replace(/^село\s+/i, 'с. ').replace(/^селище міського типу\s+/i, 'смт ').replace(/^селище\s+/i, 'с-ще ').trim();
+export const poeCities = ctx => pwCached('poe/cities', 7 * 86400, ctx, async () =>
+  (await Promise.all(POE_FIL.map(async ([f, name]) => ((await poePost('search-disconnection-cabinet.php', { operation_type: 'city', filial_id: f, city_id: '', street_id: '' }).catch(() => [])) || [])
+    .filter(c => !/_$/.test(c.instance_name)).map(c => [`${f}-${c.instance_id}`, poeName(c.instance_name), name])))).flat());
+export const poeStreets = (cid, ctx) => { const [f, c] = cid.split('-'); return pwCached(`poe/st/${cid}`, 7 * 86400, ctx, async () =>
+  (await poePost('search-disconnection-cabinet.php', { operation_type: 'street', filial_id: f, city_id: +c, street_id: '' }) || []).map(x => [String(x.instance_id), String(x.instance_name).trim()])); };
+export const poeHouses = (cid, sid, ctx) => { const [f, c] = cid.split('-'); return pwCached(`poe/h/${cid}/${sid}`, 86400, ctx, async () =>
+  (await poePost('search-disconnection-cabinet.php', { operation_type: 'building', filial_id: f, city_id: +c, street_id: +sid }) || []).map(x => String(x.instance_name).trim())); };
+export const poeInfo = (cid, sid, house, ctx) => pwCached(`poe/i/${cid}/${sid}/${house}/${Math.floor(Date.now() / 300e3)}`, 300, ctx, async () =>
+  ((await poePost('disconnectinforesult-cabinet.php', { cityid: cid.split('-')[1], streerid: String(sid), house: String(house) })) || [])[0] || null);
+export const poeQueue = info => (info && /^\d+$/.test(info.gp_qnum_1 || '') && /^\d+$/.test(info.gp_qnum_2 || '')) ? `${info.gp_qnum_1}.${info.gp_qnum_2}` : null;
+const poeTime = s => { const m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{1,2}):(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2, '0')}:${m[5]}` : null; };
+const poeStrip = h => String(h || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+export function poeItems(info) {
+  const items = [];
+  if (info && info.message_type && +info.message_type !== 0 && info.fn_accident_message) {
+    const t = poeStrip(info.fn_accident_message);
+    const kind = /аварі/i.test(t) ? 'emergency' : 'planned';
+    const reason = /ГПВ|погодинн/i.test(t) ? 'Графік погодинних відключень' : /ГАВ|аварійн[а-я]* відключ/i.test(t) && !/аварі[яї] /i.test(t) ? 'Графік аварійних відключень' : kind === 'emergency' ? 'Аварійне відключення' : 'Планові роботи';
+    items.push({ kind, reason, start: poeTime(info.accident_str), end: null, scope: 'house', source: 'Полтаваобленерго' });
+  }
+  if (info?.planned_message) { const t = poeStrip(info.planned_message); const ts = [...t.matchAll(/(\d{2}\.\d{2}\.\d{4})\D{0,12}(\d{1,2}:\d{2})/g)].map(m => poeTime(`${m[1]} ${m[2]}`));
+    if (t) items.push({ kind: 'planned', reason: 'Планові роботи', start: ts[0] || null, end: ts[1] || null, scope: 'house', source: 'Полтаваобленерго' }); }
+  return items;
+}
+export async function poeAddress({ city, street, house, cid }, nowIso, ctx) {
+  const pk = placeKey(city), sk = streetKey(street);
+  const cids = /^\d+-\d+$/.test(cid || '') ? [cid] : (await poeCities(ctx)).filter(([, n]) => placeKey(n) === pk).map(([id]) => id).slice(0, 2);
+  for (const c of cids) {
+    const st = (await poeStreets(c, ctx)).find(([, n]) => streetKey(n) === sk); if (!st) continue;
+    const info = await poeInfo(c, st[0], house, ctx);
+    if (info && +info.message_type === 0 && /декілька підключень/i.test(info.fn_accident_message || '')) return { found: false, multi: true, at: new Date().toISOString(), items: [] };
+    return { found: true, at: new Date().toISOString(), items: poeItems(info).filter(i => !i.end || !nowIso || i.end > nowIso) };
+  }
+  return { found: false, at: new Date().toISOString(), items: [] };
+}
+
 export async function addressStatus(env, params, ctx, nowIso) {
   const op = params.get('op'), city = params.get('city') || '', street = params.get('street') || '', house = params.get('house') || '';
   if (op === 'hoe') {
@@ -364,6 +412,10 @@ export async function addressStatus(env, params, ctx, nowIso) {
   if (op in PW) {
     const r = await pwAddress(op, { city, street, house }, nowIso, ctx);
     return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: PW[op].name, url: PW[op].url };
+  }
+  if (op === 'poe-poltava') {
+    const r = await poeAddress({ city, street, house, cid: params.get('cid') || '' }, nowIso, ctx);
+    return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: 'Полтаваобленерго', url: 'https://www.poe.pl.ua/disconnection/power-outages/' };
   }
   if (op === 'chernoe') {
     const r = await cvAddress({ city, street, house }, nowIso, ctx);
