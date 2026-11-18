@@ -102,7 +102,7 @@ function fetchAddr(a) {
   if (r && Date.now() - r.t < 120e3) return Promise.resolve(false);
   return addrInflight[key] ||= (async () => {
     try {
-      const q = new URLSearchParams({ op, city: a.city, street: a.street, house: a.house });
+      const q = new URLSearchParams({ op, city: a.city, street: a.street, house: a.house, ...(a.cid ? { cid: a.cid } : {}) });
       const j = await (await fetch(`${API}api/outage?${q}`)).json();
       const changed = !r || JSON.stringify(r.j?.items || []) !== JSON.stringify(j?.items || []);
       addrCache[key] = { t: Date.now(), j }; return changed;
@@ -502,7 +502,7 @@ document.addEventListener('click', async e => {
     case 'queue': draft.queue = t.dataset.v; render(); break;
     case 'queue-next': if (draft.editOf) { const a = S.addresses.find(x => x.id === draft.editOf); a.queue = draft.queue; save(); syncPush(); draft = null; view = 'edit'; toast('Чергу змінено'); } else view = 'ob-confirm'; render(); break;
     case 'dname': draft.name = t.dataset.v; render(); break;
-    case 'save': { const a = { id: uid(), name: draft.name, regionId: draft.regionId, city: draft.city, street: draft.street || '', house: draft.house || '', queue: draft.queue };
+    case 'save': { const a = { id: uid(), name: draft.name, regionId: draft.regionId, city: draft.city, street: draft.street || '', house: draft.house || '', queue: draft.queue, ...(draft.pwCity ? { cid: draft.pwCity } : {}) };
       S.addresses.push(a); if (!S.primaryId) S.primaryId = a.id; S.currentId = a.id; save(); syncPush(); draft = null; view = 'home'; day = 0; await render(); toast(`Адресу «${a.name}» збережено`); break; }
     case 'switcher': if (e.target.closest('[data-act=notif]')) { notifSheet(); break; } switcherSheet(); break;
     case 'notif': notifSheet(); break;

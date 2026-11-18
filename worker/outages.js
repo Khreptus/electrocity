@@ -293,9 +293,10 @@ export function choeAddrBlocks(html) {
   return out;
 }
 const CHOE_KIND = { 0: ['planned', 'Планові роботи'], 1: ['emergency', 'Аварійне відключення'], 2: ['planned', 'Графік погодинних відключень'] };
-export async function choeAddress({ city, street, house }, nowIso, ctx) {
+export async function choeAddress({ city, street, house, cid }, nowIso, ctx) {
   const pk = placeKey(city), sk = streetKey(street);
-  const depts = [...new Set((await choeCities(ctx)).filter(([, n]) => placeKey(n) === pk).map(([id]) => id.split('-')[0]))];
+  // філія відома з ідентифікатора населеного пункту («1-1» = філія 1, місто 1); інакше шукаємо в довіднику (≤ 2 філії, ліміт запитів)
+  const depts = /^\d+-\d+$/.test(cid || '') ? [cid.split('-')[0]] : [...new Set((await choeCities(ctx)).filter(([, n]) => placeKey(n) === pk).map(([id]) => id.split('-')[0]))].slice(0, 2);
   if (!depts.length) return { found: false, at: new Date().toISOString(), items: [] };
   const d0 = (nowIso || new Date().toISOString()).slice(0, 10); const dd = s => s.split('-').reverse().join('.');
   const d1 = new Date(Date.parse(d0) + 864e5).toISOString().slice(0, 10);
@@ -326,7 +327,7 @@ export async function addressStatus(env, params, ctx, nowIso) {
     return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: PW[op].name, url: PW[op].url };
   }
   if (op === 'choe') {
-    const r = await choeAddress({ city, street, house }, nowIso, ctx);
+    const r = await choeAddress({ city, street, house, cid: params.get('cid') || '' }, nowIso, ctx);
     return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: 'Черкасиобленерго', url: 'https://www.cherkasyoblenergo.com/off' };
   }
   if (op === 'moe') {
