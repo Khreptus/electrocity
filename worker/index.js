@@ -361,8 +361,9 @@ async function ztPost(form) {
   return new TextDecoder('windows-1251').decode(await r.arrayBuffer());
 }
 export function ztHouses(html) {
-  const tb = html.split(/<table/i).find(t => /Будинки/.test(t) && /Підчерга/.test(t)); if (!tb) return [];
-  const rows = [...tb.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map(r => [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(c => c[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())).filter(c => c.length >= 6);
+  // рядки результату — <tr> із 7 клітинками, остання «… споживачі». Сайт віддає лише ~10 рядків за запит,
+  // тож список будинків вулиці може бути неповним — тоді застосунок пропонує обрати чергу вручну.
+  const rows = html.split(/<tr[\s>]/i).slice(1).map(ch => [...ch.split(/<\/table/i)[0].matchAll(/<td[^>]*>([\s\S]*?)(?=<\/td>|<td|<\/tr|$)/gi)].map(c => c[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())).filter(c => c.length >= 7 && /споживач/i.test(c[6]));
   const home = rows.filter(c => /побут/i.test(c[6] || '') && !/непобут/i.test(c[6] || ''));
   const m = {};
   for (const c of (home.length ? home : rows)) {

@@ -349,7 +349,25 @@ function regionMatch(x, q) {
   const sq = skel(q.replace(/^никола/, 'микола')); if (sq.replace(/\*/g, '').length < 2) return false;
   return (' ' + skel(hay)).includes(' ' + sq); // з початку слова, можна кілька слів («Кривой Рог»)
 }
+// Де оператор показує чергу за адресою (якщо автоматично визначити не вдалося)
+const QUEUE_LOOKUP = {
+  hoe: 'https://hoe.com.ua/shutdown/queue',
+  zhoe: 'https://www.ztoe.com.ua/unhooking-search.php',
+  choe: 'https://www.cherkasyoblenergo.com/off',
+  roe: 'https://www.roe.vsei.ua/disconnections',
+  soe: 'https://www.soe.com.ua/consumers/shutdowns',
+  chernoe: 'https://oblenergo.cv.ua/shutdowns-search/',
+  koe: 'https://kiroe.com.ua/electricity-blackout',
+  'voe-volyn': 'https://energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni/hrafik-vidkliuchen/',
+  'poe-poltava': 'https://www.poe.pl.ua/',
+  khoe: 'https://www.oblenergo.kharkov.ua/',
+  toe: 'https://www.toe.com.ua/',
+  'dtek-krem': 'https://www.dtek-krem.com.ua/ua/shutdowns', 'dtek-dem': 'https://www.dtek-dem.com.ua/ua/shutdowns',
+  'dtek-dnem': 'https://www.dtek-dnem.com.ua/ua/shutdowns', 'dtek-oem': 'https://www.dtek-oem.com.ua/ua/shutdowns', 'dtek-kem': 'https://www.dtek-kem.com.ua/ua/shutdowns',
+};
 function manualReason(r) {
+  if (r.op === 'zhoe') return 'Житомиробленерго показує лише частину будинків вулиці за один запит — якщо вашого будинку немає в підказках, дізнайтеся чергу на сайті обленерго.';
+  if (r.op === 'choe') return 'Черкасиобленерго шукає чергу лише за номером особового рахунку — дізнайтеся її на сайті обленерго.';
   if (r.op === 'chernoe') return 'Група визначається за офіційними списками адрес Чернівціобленерго — оберіть населений пункт, вулицю й будинок зі списку підказок.';
   if (r.op === 'hoe') return 'Черга визначається за офіційними списками адрес Хмельницькобленерго — оберіть населений пункт, вулицю й будинок зі списку підказок. Якщо адреси там немає, перевірте чергу на hoe.com.ua → «Перевірити чергу» і оберіть її тут.';
   if (r.op.startsWith('dtek-')) return 'Автовизначення черги для ДТЕК з’явиться після підключення сервера (вже в плані). Поки що черга вказана на сайті ДТЕК у розділі «Відключення» за вашою адресою.';
@@ -378,7 +396,7 @@ function onboarding() {
     <div id="addr-res"></div>
     ${auto ? '' : `<div class="banner warn">${ic('alert')}<div><div class="bt">Чергу доведеться обрати вручну</div><div class="bb">${manualReason(r)}</div></div></div>`}
     <div style="flex:1"></div><button class="btn primary" id="addr-next" data-act="address-next">${auto ? 'Обрати чергу вручну' : 'Обрати чергу'}</button></section>`; }
-  if (view === 'ob-queue') { const ql = queueList(r.queues); return bk(draft.method === 'address' ? 'ob-address' : 'ob-method') + `<section class="sheet r32">${steps(4)}<div class="h-l">Оберіть чергу</div>${draft.method === 'address' && !draft.autoQueue && !draft.editOf ? `<div class="banner warn">${ic('alert')}<div><div class="bt">Не вдалося визначити чергу автоматично</div><div class="bb">Оберіть її вручну. ${esc(manualReason(r))}</div></div></div>${r.op === 'hoe' ? `<a class="btn" href="https://hoe.com.ua/shutdown/queue" target="_blank" rel="noopener">${ic('external')}Перевірити на сайті обленерго</a>` : ''}` : ''}<div class="body-s">Черги ${esc(r.opName)}</div>
+  if (view === 'ob-queue') { const ql = queueList(r.queues); return bk(draft.method === 'address' ? 'ob-address' : 'ob-method') + `<section class="sheet r32">${steps(4)}<div class="h-l">Оберіть чергу</div>${draft.method === 'address' && !draft.autoQueue && !draft.editOf ? `<div class="banner warn">${ic('alert')}<div><div class="bt">Не вдалося визначити чергу автоматично</div><div class="bb">Оберіть її вручну. ${esc(manualReason(r))}</div></div></div>${QUEUE_LOOKUP[r.op] ? `<a class="btn" href="${QUEUE_LOOKUP[r.op]}" target="_blank" rel="noopener">${ic('external')}Дізнатися чергу на сайті ${esc(r.opName)}</a>` : ''}` : ''}<div class="body-s">Черги ${esc(r.opName)}</div>
     <div class="qgrid ${r.queues.type === 'plain' ? 'c3' : ''}">${ql.map(q => `<button class="qcell" data-act="queue" data-v="${q}" aria-pressed="${draft.queue === q}">${q}</button>`).join('')}</div>
     <div style="flex:1"></div><button class="btn primary" data-act="queue-next" ${draft.queue ? '' : 'disabled'}>${draft.queue ? 'Обрати ' + draft.queue : 'Оберіть чергу'}</button></section>`; }
   if (view === 'ob-confirm') return bk('ob-queue') + `<section class="sheet r32"><div class="h-l">Все готово</div>
