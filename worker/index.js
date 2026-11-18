@@ -351,7 +351,48 @@ async function yasnoAddr(kind, q, ctx) {
   return out;
 }
 
+// Житомиробленерго: звичайна форма ztoe.com.ua/unhooking-search.php (POST rem_id → naspunkt_id → vulica_id, кодування windows-1251).
+// Відповідь — таблиця «РЕМ | Нас. пункт | Вулиця | Будинки | Черга | Підчерга | Примітка». Беремо побутових споживачів.
+const ZT = 'https://www.ztoe.com.ua/unhooking-search.php';
+const ztOpts = (html, name) => { const m = html.match(new RegExp(`<select[^>]*name=["']?${name}["']?[^>]*>([\\s\\S]*?)</select>`, 'i')); return m ? [...m[1].matchAll(/<option[^>]*value=["']?(\d+)["']?[^>]*>([^<]*)/gi)].filter(o => o[1] !== '0').map(o => ({ id: o[1], label: o[2].replace(/\s+/g, ' ').trim() })) : []; };
+async function ztPost(form) {
+  const r = await fetch(ZT, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form) });
+  if (!r.ok) throw new Error(`Житомиробленерго: HTTP ${r.status}`);
+  return new TextDecoder('windows-1251').decode(await r.arrayBuffer());
+}
+export function ztHouses(html) {
+  const tb = html.split(/<table/i).find(t => /Будинки/.test(t) && /Підчерга/.test(t)); if (!tb) return [];
+  const rows = [...tb.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map(r => [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(c => c[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())).filter(c => c.length >= 6);
+  const home = rows.filter(c => /побут/i.test(c[6] || '') && !/непобут/i.test(c[6] || ''));
+  const m = {};
+  for (const c of (home.length ? home : rows)) {
+    if (!/^\d+$/.test(c[4]) || !/^\d+$/.test(c[5])) continue; const q = `${c[4]}.${c[5]}`;
+    for (const h of c[3].split(/,\s*/).map(x => x.trim()).filter(Boolean)) (m[h] ||= new Set()).add(q);
+  }
+  return Object.entries(m).map(([label, qs]) => ({ label, queues: [...qs] })).sort((a, b) => a.label.localeCompare(b.label, 'uk', { numeric: true }));
+}
+async function ztDir(kind, q, ctx) {
+  const ck = new Request(`https://cache.electrocity/zt1/${kind}?${q.get('cityId') || ''}&${q.get('streetId') || ''}`);
+  const hit = await caches.default.match(ck); if (hit) return hit.json();
+  let out;
+  if (kind === 'cities') {
+    const home = new TextDecoder('windows-1251').decode(await (await fetch(ZT, { headers: { 'User-Agent': UA } })).arrayBuffer());
+    const rems = ztOpts(home, 'rem_id'); if (!rems.length) throw new Error('Житомиробленерго: список РЕМ не знайдено (формат змінився)');
+    const lists = await Promise.all(rems.map(async rm => ztOpts(await ztPost({ rem_id: rm.id }), 'naspunkt_id').map(c => ({ id: `${rm.id}-${c.id}`, label: c.label.replace(/^місто /, 'м. '), sub: `${rm.label} РЕМ` }))));
+    out = lists.flat();
+  } else {
+    const [rem, ns] = String(q.get('cityId') || '').split('-');
+    if (!/^\d+$/.test(rem || '') || !/^\d+$/.test(ns || '')) throw new Error('невідомий населений пункт');
+    if (kind === 'streets') out = ztOpts(await ztPost({ rem_id: rem, naspunkt_id: ns }), 'vulica_id');
+    else if (kind === 'houses') { if (!/^\d+$/.test(q.get('streetId') || '')) throw new Error('невідома вулиця'); out = ztHouses(await ztPost({ rem_id: rem, naspunkt_id: ns, vulica_id: q.get('streetId') })); }
+    else throw new Error('невідомий запит');
+  }
+  ctx.waitUntil(caches.default.put(ck, new Response(JSON.stringify(out), { headers: { 'Cache-Control': `max-age=${kind === 'houses' ? 21600 : 604800}` } })));
+  return out;
+}
+
 async function pwDir(kind, q, ctx) {
+  if (q.get('op') === 'zhoe') return ztDir(kind, q, ctx);
   const P = PW[q.get('op')]; if (!P) throw new Error('регіон не підтримується');
   const path = kind === 'cities' ? '/pw_cities?pagination=false'
     : kind === 'streets' ? `/pw_streets?pagination=false&city.id=${+q.get('cityId')}`

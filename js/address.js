@@ -73,7 +73,7 @@ export const YASNO_OPS = new Set(['dtek-kem', 'dtek-dnem']);
 export const isYasno = region => YASNO_OPS.has(region.op) && API_READY;
 const yq = (kind, params) => fetch(`${API}api/yasno/${kind}?${new URLSearchParams(params)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 // Львівобленерго: довідник «Чому немає світла?» з чергою кожного будинку
-export const PW_OPS = new Set(['loe']);
+export const PW_OPS = new Set(['loe', 'zhoe']); // довідники через наш сервер: Львівобленерго (API), Житомиробленерго (форма пошуку)
 export const isPw = region => PW_OPS.has(region.op) && API_READY;
 const pq = (kind, params) => fetch(`${API}api/pw/${kind}?${new URLSearchParams(params)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 const pwCities = {};
