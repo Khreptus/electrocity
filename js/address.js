@@ -74,8 +74,57 @@ export const isYasno = region => YASNO_OPS.has(region.op) && API_READY;
 const yq = (kind, params) => fetch(`${API}api/yasno/${kind}?${new URLSearchParams(params)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 // Львівобленерго: довідник «Чому немає світла?» з чергою кожного будинку
 export const PW_OPS = new Set(['loe', 'zhoe', 'choe', 'poe-poltava']); // довідники через наш сервер: Львівобленерго (API), Житомиробленерго (форма пошуку)
-export const isPw = region => PW_OPS.has(region.op) && API_READY;
-export const pq = (kind, params) => fetch(`${API}api/pw/${kind}?${new URLSearchParams(params)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+export const isPw = region => PW_OPS.has(region.op) && (API_READY || region.op === 'poe-poltava');
+export const pq = (kind, params) => params.op === 'poe-poltava' ? poeClient(kind, params) : fetch(`${API}api/pw/${kind}?${new URLSearchParams(params)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+
+// ---------- Полтаваобленерго: напряму з браузера користувача ----------
+// Сайт poe.pl.ua не відповідає серверам Cloudflare (522), але дозволяє запити з інших сайтів (CORS) — тож довідник адрес,
+// черга будинку й відключення за адресою беруться з відкритого пошуку «Інформація про перерви в електропостачанні» прямо з телефона.
+const POE = 'https://www.poe.pl.ua/customs/';
+const POE_FIL = [['102', 'Великокохнівська'], ['103', 'Гадяцька'], ['104', 'Глобинська'], ['112', 'Горішньоплавнівська'], ['105', 'Гребінківська'], ['106', 'Диканська'], ['108', 'Зінківська'], ['109', 'Карлівська'], ['110', 'Кобеляцька'], ['111', 'Козельщинська'], ['113', 'Котелевська'], ['114', 'Красногорівська'], ['115', 'Кременчуцька'], ['116', 'Лохвицька'], ['117', 'Лубенська'], ['118', 'Машівська'], ['119', 'Миргородська'], ['120', 'Новосанжарська'], ['121', 'Оржицька'], ['122', 'Пирятинська'], ['131', 'Полтавська (райони)'], ['123', 'Полтавська'], ['124', 'Решетилівська'], ['125', 'Семенівська'], ['126', 'Хорольська'], ['127', 'Чорнухинська'], ['128', 'Чутівська'], ['129', 'Шишацька']];
+const poePost = (file, obj) => fetch(POE + file, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: 'disconn=' + encodeURIComponent(JSON.stringify(obj)) }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+const poeName = s => String(s || '').replace(/^місто\s+/i, 'м. ').replace(/^село\s+/i, 'с. ').replace(/^селище міського типу\s+/i, 'смт ').replace(/^селище\s+/i, 'с-ще ').trim();
+const poeMem = {};
+function poeCached(key, ttlMs, load) {
+  if (poeMem[key]) return poeMem[key];
+  try { const c = JSON.parse(localStorage.getItem('ec.poe.' + key) || 'null'); if (c && Date.now() - c.t < ttlMs) return (poeMem[key] = Promise.resolve(c.v)); } catch {}
+  return (poeMem[key] = load().then(v => { try { localStorage.setItem('ec.poe.' + key, JSON.stringify({ t: Date.now(), v })); } catch {} return v; }).catch(e => { delete poeMem[key]; throw e; }));
+}
+const poeTime = s => { const m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{1,2}):(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2, '0')}:${m[5]}` : null; };
+const poeStrip = h => String(h || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const poeInfo = (cid, sid, house) => poePost('disconnectinforesult-cabinet.php', { cityid: cid.split('-')[1], streerid: String(sid), house: String(house) }).then(a => (a || [])[0] || null);
+function poeItems(info) {
+  const items = [];
+  if (info && +info.message_type && info.fn_accident_message) {
+    const t = poeStrip(info.fn_accident_message); const kind = /аварі/i.test(t) ? 'emergency' : 'planned';
+    items.push({ kind, reason: /ГПВ|погодинн/i.test(t) ? 'Графік погодинних відключень' : kind === 'emergency' ? 'Аварійне відключення' : 'Планові роботи', start: poeTime(info.accident_str), end: null, scope: 'house', source: 'Полтаваобленерго' });
+  }
+  if (info?.planned_message) { const t = poeStrip(info.planned_message); const ts = [...t.matchAll(/(\d{2}\.\d{2}\.\d{4})\D{0,12}(\d{1,2}:\d{2})/g)].map(m => poeTime(`${m[1]} ${m[2]}`));
+    if (t) items.push({ kind: 'planned', reason: 'Планові роботи', start: ts[0] || null, end: ts[1] || null, scope: 'house', source: 'Полтаваобленерго' }); }
+  return items;
+}
+const pk = s => String(s || '').toLowerCase().replace(/[’'ʼ`]/g, '').replace(/\(.*?\)/g, '').replace(/^(м|с|смт|с-ще|селище|село|місто)\.?\s+/, '').replace(/\s+/g, ' ').trim();
+const sk = s => String(s || '').toLowerCase().replace(/[’'ʼ`.]/g, '').replace(/^(вул|вулиця|пров|провулок|просп|проспект|пр|пл|площа|бул|бульвар|туп|тупик|узвіз|шосе|наб|набережна|мкр|мікрорайон|проїзд|майдан)\s+/, '').replace(/\s+/g, ' ').trim();
+export async function poeClient(kind, p) {
+  if (kind === 'cities') return poeCached('cities', 7 * 864e5, async () => (await Promise.all(POE_FIL.map(async ([f, name]) =>
+    ((await poePost('search-disconnection-cabinet.php', { operation_type: 'city', filial_id: f, city_id: '', street_id: '' }).catch(() => [])) || [])
+      .filter(c => !/_$/.test(c.instance_name)).map(c => ({ id: `${f}-${c.instance_id}`, label: poeName(c.instance_name), sub: `${name} дільниця` }))))).flat());
+  const cid = String(p.cityId || p.cid || ''); const [f, c] = cid.split('-');
+  if (kind === 'streets') return poeCached('st' + cid, 7 * 864e5, async () => ((await poePost('search-disconnection-cabinet.php', { operation_type: 'street', filial_id: f, city_id: +c, street_id: '' })) || []).map(x => ({ id: String(x.instance_id), label: String(x.instance_name).trim() })));
+  if (kind === 'houses') return ((await poePost('search-disconnection-cabinet.php', { operation_type: 'building', filial_id: f, city_id: +c, street_id: +p.streetId })) || []).map(x => ({ label: String(x.instance_name).trim(), remote: true }));
+  if (kind === 'queue') { const i = await poeInfo(cid, p.streetId, p.house); const q = i && /^\d+$/.test(i.gp_qnum_1 || '') && /^\d+$/.test(i.gp_qnum_2 || '') ? `${i.gp_qnum_1}.${i.gp_qnum_2}` : null;
+    return { queue: q, multi: !!(i && +i.message_type === 0 && /декілька/i.test(i.fn_accident_message || '')) }; }
+  if (kind === 'outage') { // { city, street, house, cid } → той самий формат, що й /api/outage
+    let id = /^\d+-\d+$/.test(cid) ? cid : ((await poeClient('cities', {})).find(x => pk(x.label) === pk(p.city)) || {}).id;
+    const base = { ok: true, supported: true, source: 'Полтаваобленерго', url: 'https://www.poe.pl.ua/disconnection/power-outages/', checkedAt: new Date().toISOString() };
+    if (!id) return { ...base, found: false, items: [] };
+    const st = (await poeClient('streets', { cityId: id })).find(x => sk(x.label) === sk(p.street)); if (!st) return { ...base, found: false, items: [] };
+    const info = await poeInfo(id, st.id, p.house);
+    if (info && +info.message_type === 0 && /декілька/i.test(info.fn_accident_message || '')) return { ...base, found: false, items: [] };
+    return { ...base, found: true, items: poeItems(info) };
+  }
+  throw new Error('невідомий запит');
+}
 const pwCities = {};
 export const yasnoGroup = (op, streetId, houseId, cityId) => yq('group', { op, streetId, houseId, ...(cityId ? { cityId } : {}) }).then(j => j.queue);
 

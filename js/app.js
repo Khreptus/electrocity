@@ -103,7 +103,7 @@ function fetchAddr(a) {
   return addrInflight[key] ||= (async () => {
     try {
       const q = new URLSearchParams({ op, city: a.city, street: a.street, house: a.house, ...(a.cid ? { cid: a.cid } : {}) });
-      const j = await (await fetch(`${API}api/outage?${q}`)).json();
+      const j = op === 'poe-poltava' ? await (await import('./address.js')).poeClient('outage', Object.fromEntries(q)) : await (await fetch(`${API}api/outage?${q}`)).json();
       const changed = !r || JSON.stringify(r.j?.items || []) !== JSON.stringify(j?.items || []);
       addrCache[key] = { t: Date.now(), j }; return changed;
     } catch { return false; } finally { delete addrInflight[key]; }
