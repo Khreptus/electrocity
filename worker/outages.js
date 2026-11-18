@@ -316,6 +316,45 @@ export async function choeAddress({ city, street, house, cid }, nowIso, ctx) {
   return { found: true, at: new Date().toISOString(), items: items.sort((a, b) => (a.start || '').localeCompare(b.start || '')) };
 }
 
+
+// ---------- Чернівціобленерго: аварійні й планові відключення за адресою ----------
+// oblenergo.cv.ua/shutdowns/planovi_avarijni_result.php — відкрита форма сайту (POST v_type 0 — аварійні, 1 — планові;
+// v_diln — дільниця; v_city, v_street — частина назви ≥ 3 літер; v_date). Відповідь — рядки
+// <td>опубліковано</td><td>дільниця</td><td>м. Чернівці</td><td>вул. ГАЙСИНСЬКА,<br><span>буд. 5, буд. 15</span></td><td>початок</td><td>кінець</td>
+const CVR = 'https://oblenergo.cv.ua/shutdowns/planovi_avarijni_result.php';
+const cvPlace = s => String(s || '').toLowerCase().replace(/['"ʼ`]/g, '’').replace(/\(.*?\)/g, '').replace(/^(м|с|смт|с-ще|селище|село|місто)\.?\s+/, '').replace(/\s+/g, ' ').trim();
+export function cvRows(html) {
+  return [...String(html || '').matchAll(/<tr>([\s\S]*?)<\/tr>/gi)].map(r => [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(c => c[1])).filter(c => c.length === 6)
+    .map(c => { const [st, hs] = c[3].split(/<br\s*\/?>/i); const t = x => String(x || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+      return { place: t(c[2]), street: t(st).replace(/,$/, ''), houses: t(hs).replace(/буд\.\s*/gi, ''), start: t(c[4]).slice(0, 16).replace(' ', 'T'), end: t(c[5]).slice(0, 16).replace(' ', 'T') }; });
+}
+export async function cvAddress({ city, street, house }, nowIso, ctx) {
+  const { CV_DIST } = await import('./cv-dist.js');
+  const pk = cvPlace(city); const d = CV_DIST[pk]; const dists = d ? d.split('.') : pk === 'чернівці' ? ['1'] : null;
+  const sk = streetKey(street); const word = sk.split(/[\s-]+/).filter(w => w.length >= 3).sort((a, b) => b.length - a.length)[0];
+  if (!dists || !word) return { found: false, at: new Date().toISOString(), items: [] };
+  const d0 = (nowIso || new Date().toISOString()).slice(0, 10), d1 = new Date(Date.parse(d0) + 864e5).toISOString().slice(0, 10);
+  const dd = x => x.split('-').reverse().join('.');
+  const jobs = []; for (const di of dists.slice(0, 3)) for (const [type, date] of [[0, d0], [1, d0], [1, d1]]) jobs.push([di, type, date]);
+  const items = [];
+  await Promise.all(jobs.map(async ([di, type, date]) => {
+    const rows = await pwCached(`cv/${di}/${type}/${date}/${pk}/${word}/${Math.floor(Date.now() / 600e3)}`, 600, ctx, async () => {
+      const r = await fetch(CVR, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+        body: new URLSearchParams({ v_type: String(type), v_diln: di, v_city: pk.slice(0, 40), v_street: word, v_house: '', v_date: dd(date), v_sort_field: '4', v_sort_type: '0', v_page: '1' }) });
+      if (!r.ok) throw new Error(`Чернівціобленерго: HTTP ${r.status}`);
+      return cvRows((await r.json()).data);
+    });
+    for (const e of rows) {
+      if (cvPlace(e.place) !== pk || streetKey(e.street) !== sk) continue;
+      if (e.end && nowIso && e.end < nowIso) continue;
+      const scope = !e.houses ? 'street' : houseIn(e.houses, house) ? 'house' : null; if (!scope) continue;
+      items.push({ kind: type === 0 ? 'emergency' : 'planned', reason: type === 0 ? 'Аварійне відключення' : 'Планові роботи', start: e.start, end: e.end, scope, source: 'Чернівціобленерго' });
+    }
+  }));
+  const seen = new Set(); const uniq = items.filter(i => { const k = i.kind + i.start + i.end; return !seen.has(k) && seen.add(k); });
+  return { found: true, at: new Date().toISOString(), items: uniq.sort((a, b) => (a.start || '').localeCompare(b.start || '')) };
+}
+
 export async function addressStatus(env, params, ctx, nowIso) {
   const op = params.get('op'), city = params.get('city') || '', street = params.get('street') || '', house = params.get('house') || '';
   if (op === 'hoe') {
@@ -325,6 +364,10 @@ export async function addressStatus(env, params, ctx, nowIso) {
   if (op in PW) {
     const r = await pwAddress(op, { city, street, house }, nowIso, ctx);
     return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: PW[op].name, url: PW[op].url };
+  }
+  if (op === 'chernoe') {
+    const r = await cvAddress({ city, street, house }, nowIso, ctx);
+    return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: 'Чернівціобленерго', url: 'https://oblenergo.cv.ua/shutdowns/' };
   }
   if (op === 'choe') {
     const r = await choeAddress({ city, street, house, cid: params.get('cid') || '' }, nowIso, ctx);
