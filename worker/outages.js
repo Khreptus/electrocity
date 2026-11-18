@@ -266,6 +266,55 @@ export async function dtekStore(env, results) {
 }
 
 // ---------- єдиний запит для застосунку ----------
+
+// ---------- Черкасиобленерго: відключення за адресою без особових рахунків ----------
+// cabinet.cherkasyoblenergo.com/api_new/disconn.php — відкритий пошук сайту «По філії»:
+// disconn_by_dept (disconn_selector 0 — планові, 1 — аварійні, 2 — ГПВ) повертає події з адресами
+// «<strong>м. Черкаси</strong><br>вул. Хрещатик 10, 11, 12<br>…». Шукаємо свій будинок у цих списках.
+// Запити за особовими рахунками (ls_list_by_addr, disconn_by_ls) НЕ використовуємо.
+export const CHOE = 'https://cabinet.cherkasyoblenergo.com/api_new/disconn.php';
+export const CHOE_DEPTS = [['1', 'Черкаські міські енергетичні мережі'], ['2', 'Смілянські енергетичні мережі'], ['3', 'Уманські енергетичні мережі'], ['4', 'Городищенська філія'], ['5', 'Драбівська філія'], ['6', 'Жашківська філія'], ['7', 'Звенигородські енергетичні мережі'], ['8', 'Золотоніські енергетичні мережі'], ['9', "Кам'янська філія"], ['10', 'Канівська філія'], ['11', 'Калинопільська філія'], ['12', 'Корсунь-Шевченківська філія'], ['13', 'Лисянська філія'], ['14', 'Маньківська філія'], ['15', 'Монастирищенська філія'], ['16', 'Смілянське відділення'], ['17', 'Тальнівська філія'], ['18', 'Христинівська філія'], ['19', 'Черкаські районні енергетичні мережі'], ['20', 'Чигиринська філія'], ['21', 'Чорнобаївська філія'], ['22', 'Шполянська філія']];
+export async function choeGet(q) {
+  const r = await fetch(`${CHOE}?${q}`, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`Черкасиобленерго: HTTP ${r.status}`); return r.json();
+}
+export const choeCities = ctx => pwCached('choe/cities', 7 * 86400, ctx, async () =>
+  (await Promise.all(CHOE_DEPTS.map(async ([d, name]) => (await choeGet(`op=city_list&dept_id=${d}`).catch(() => [])).map(c => [`${d}-${c.ID}`, String(c.NAME).trim(), name])))).flat());
+const choeTime = s => { const m = String(s || '').match(/(\d{1,2}):(\d{2})\s+(\d{2})\.(\d{2})\.(\d{4})/); return m ? `${m[5]}-${m[4]}-${m[3]}T${m[1].padStart(2, '0')}:${m[2]}` : null; };
+// Розбір поля ADDRESS: блоки «<strong>нас. пункт</strong><br>вулиця будинки<br>…»
+export function choeAddrBlocks(html) {
+  const out = []; let place = '';
+  for (const part of String(html || '').split(/<br\s*\/?>/i)) {
+    const pm = part.match(/<strong>([^<]*)<\/strong>/i); if (pm) { place = pm[1].trim(); continue; }
+    const t = part.replace(/<[^>]+>/g, '').trim(); if (!t) continue;
+    const m = t.match(/^(.*?[^\d\s,])\s+(\d[\s\S]*)$/); // «вул. В. Симоненка 1, 11, 13» → вулиця + будинки
+    out.push({ place, street: m ? m[1].trim() : t, houses: m ? m[2].trim() : '' });
+  }
+  return out;
+}
+const CHOE_KIND = { 0: ['planned', 'Планові роботи'], 1: ['emergency', 'Аварійне відключення'], 2: ['planned', 'Графік погодинних відключень'] };
+export async function choeAddress({ city, street, house }, nowIso, ctx) {
+  const pk = placeKey(city), sk = streetKey(street);
+  const depts = [...new Set((await choeCities(ctx)).filter(([, n]) => placeKey(n) === pk).map(([id]) => id.split('-')[0]))];
+  if (!depts.length) return { found: false, at: new Date().toISOString(), items: [] };
+  const d0 = (nowIso || new Date().toISOString()).slice(0, 10); const dd = s => s.split('-').reverse().join('.');
+  const d1 = new Date(Date.parse(d0) + 864e5).toISOString().slice(0, 10);
+  const items = [];
+  for (const d of depts) for (const sel of [0, 1, 2]) {
+    const ev = await pwCached(`choe/ev/${d}/${sel}/${d0}/${Math.floor(Date.now() / 600e3)}`, 600, ctx, async () =>
+      ((await choeGet(`op=disconn_by_dept&disconn_selector=${sel}&n_date=${dd(d0)}&k_date=${dd(d1)}&dept_id=${d}`)).DISCONNECTIONS || [])
+        .filter(e => !/відмін|заверш/i.test(e.STATE_CHAR || '')).map(e => [choeTime(e.DATE_START), choeTime(e.DATE_STOP), e.ADDRESS]));
+    for (const [start, end, addr] of ev) {
+      if (end && nowIso && end < nowIso) continue;
+      const hit = choeAddrBlocks(addr).find(b => placeKey(b.place) === pk && streetKey(b.street) === sk && (!b.houses || houseIn(b.houses, house)));
+      if (!hit) continue;
+      const [kind, reason] = CHOE_KIND[sel];
+      items.push({ kind, reason, start, end, scope: hit.houses ? 'house' : 'street', source: 'Черкасиобленерго' });
+    }
+  }
+  return { found: true, at: new Date().toISOString(), items: items.sort((a, b) => (a.start || '').localeCompare(b.start || '')) };
+}
+
 export async function addressStatus(env, params, ctx, nowIso) {
   const op = params.get('op'), city = params.get('city') || '', street = params.get('street') || '', house = params.get('house') || '';
   if (op === 'hoe') {
@@ -275,6 +324,10 @@ export async function addressStatus(env, params, ctx, nowIso) {
   if (op in PW) {
     const r = await pwAddress(op, { city, street, house }, nowIso, ctx);
     return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: PW[op].name, url: PW[op].url };
+  }
+  if (op === 'choe') {
+    const r = await choeAddress({ city, street, house }, nowIso, ctx);
+    return { ok: true, supported: true, found: r.found, checkedAt: r.at, items: r.items, source: 'Черкасиобленерго', url: 'https://www.cherkasyoblenergo.com/off' };
   }
   if (op === 'moe') {
     const r = await moeAddress({ city, street, house }, nowIso, ctx);

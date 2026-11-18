@@ -5,7 +5,7 @@
 // • усе інше — статичні файли застосунку (ASSETS)
 import { parseDtek, parseHoe, parseMoe, SOURCES } from './sources.js';
 import { sendPush, vapidKeys } from './push.js';
-import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME, DTEK_RUNNER, dtekViaRunner, dtekQueue, dtekStore, PW, pwAddress } from './outages.js';
+import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME, DTEK_RUNNER, dtekViaRunner, dtekQueue, dtekStore, PW, pwAddress, choeCities, choeGet } from './outages.js';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 const json = (d, s = 200, h = {}) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, ...h } });
@@ -392,8 +392,24 @@ async function ztDir(kind, q, ctx) {
   return out;
 }
 
+// Черкасиобленерго: відкритий довідник адрес пошуку «По адресі» (без особових рахунків)
+async function choeDir(kind, q, ctx) {
+  if (kind === 'cities') return (await choeCities(ctx)).map(([id, label, sub]) => ({ id, label, sub }));
+  const ck = new Request(`https://cache.electrocity/choe1/${kind}?${q.get('cityId') || ''}&${q.get('streetId') || ''}`);
+  const hit = await caches.default.match(ck); if (hit) return hit.json();
+  let out;
+  if (kind === 'streets') { const c = String(q.get('cityId') || '').split('-')[1]; if (!/^\d+$/.test(c || '')) throw new Error('невідомий населений пункт');
+    out = (await choeGet(`op=street_list&city_id=${c}&search_name=`)).filter(x => !/^\*/.test(x.NAME)).map(x => ({ id: String(x.ID), label: String(x.NAME).trim() })); }
+  else if (kind === 'houses') { if (!/^\d+$/.test(q.get('streetId') || '')) throw new Error('невідома вулиця');
+    out = (await choeGet(`op=house_list&street_id=${q.get('streetId')}&search_name=`)).map(x => String(x.HOUSE).trim()).filter(h => h && h !== '0').map(label => ({ label })); }
+  else throw new Error('невідомий запит');
+  ctx.waitUntil(caches.default.put(ck, new Response(JSON.stringify(out), { headers: { 'Cache-Control': 'max-age=604800' } })));
+  return out;
+}
+
 async function pwDir(kind, q, ctx) {
   if (q.get('op') === 'zhoe') return ztDir(kind, q, ctx);
+  if (q.get('op') === 'choe') return choeDir(kind, q, ctx);
   const P = PW[q.get('op')]; if (!P) throw new Error('регіон не підтримується');
   const path = kind === 'cities' ? '/pw_cities?pagination=false'
     : kind === 'streets' ? `/pw_streets?pagination=false&city.id=${+q.get('cityId')}`

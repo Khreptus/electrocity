@@ -120,3 +120,9 @@ test('Житомир: таблиця пошуку черги', () => {
   const r = ztHouses(html);
   assert.deepEqual(r.map(h => [h.label, h.queues.join()]), [['14', '1.2'], ['16', '1.2'], ['122', '1.1']]);
 });
+
+import { choeAddrBlocks } from '../worker/outages.js';
+test('Черкаси: адреси подій «По філії»', () => {
+  const b = choeAddrBlocks('<strong>м. Черкаси</strong><br>вул. Хрещатик 10, 11, 11/1<br>вул. А. Терещенка 24, 25<br><strong>с. Богуславець</strong><br>вул. В. Симоненка 1, 3');
+  assert.deepEqual(b.map(x => [x.place, x.street, x.houses]), [['м. Черкаси', 'вул. Хрещатик', '10, 11, 11/1'], ['м. Черкаси', 'вул. А. Терещенка', '24, 25'], ['с. Богуславець', 'вул. В. Симоненка', '1, 3']]);
+});
