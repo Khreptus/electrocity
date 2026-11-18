@@ -69,10 +69,10 @@ export default {
       if (p === '/api/badge/installs') { const st = JSON.parse(await env.KV.get('stats') || '{"installs":0}');
         return json({ schemaVersion: 1, label: 'встановлень', message: String(st.installs), color: 'E39A0B', labelColor: '1B1B1B' }, 200, { 'Cache-Control': 'max-age=300' }); }
       if (p === '/api/status') return json({ ok: true, ...(JSON.parse(await env.KV.get('status') || '{}')) });
-      if (p === '/api/tick') { // ручний запуск збору, не частіше разу на хвилину
+      if (p === '/api/tick') { // ручний запуск збору (кнопка «Перевірити», відкриття застосунку), не частіше разу на 2 хв
         const lockKey = new Request('https://lock.local/tick'); const c = caches.default;
         if (await c.match(lockKey)) return json({ error: 'too soon' }, 429);
-        await c.put(lockKey, new Response('1', { headers: { 'Cache-Control': 'max-age=60' } }));
+        await c.put(lockKey, new Response('1', { headers: { 'Cache-Control': 'max-age=120' } }));
         const t0 = Date.now(); const st = await tick(env, true); return json({ ms: Date.now() - t0, status: st });
       }
       if (p.startsWith('/api/')) return json({ error: 'not found' }, 404);
@@ -123,7 +123,10 @@ async function tick(env, manual = false) {
     }
   }));
   // статус пишемо рідко (ліміт записів KV): раз на 30 хв або при помилці
-  if (now.min % 30 === 0 || Object.values(status).some(s => !s.ok)) await env.KV.put('status', JSON.stringify(status)).catch(() => {});
+  // …і лише якщо щось змінилось (окрім часу перевірки), щоб часті ручні перевірки не з'їли ліміт
+  const sig = o => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]?.ok, o[k]?.error, o[k]?.warn, o[k]?.empty]));
+  const changed = sig(status) !== sig(prevStatus);
+  if ((now.min % 30 === 0 && !manual) || changed) await env.KV.put('status', JSON.stringify(status)).catch(() => {});
 
   if (manual) return status;
   const subs = await getSubs(env);

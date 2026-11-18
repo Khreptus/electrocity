@@ -527,7 +527,12 @@ addEventListener('online', render); addEventListener('offline', render);
 
 // Оновлення таймера й індикатора «зараз» щохвилини (раз на 20 с для точності)
 setInterval(() => { if (['home', 'detail', 'addresses'].includes(view) && !document.querySelector('.bsheet')) render(); }, 20000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+// Відкрили застосунок (або повернулися до нього) — тихо просимо сервер перевірити сайти обленерго, щоб не чекати
+// планового збору (раз на 15 хв). Не частіше ніж раз на 3 хв з одного пристрою.
+let lastAutoTick = 0;
+function autoRefresh() { if (S.addresses.length && API_READY && Date.now() - lastAutoTick > 180000) { lastAutoTick = Date.now(); refreshNow(); } else render(); }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefresh(); });
+setTimeout(autoRefresh, 1500);
 
 if ('serviceWorker' in navigator) {
   // Нова версія: щойно новий SW бере керування — один раз перезавантажуємо, щоб одразу показати зміни.
