@@ -477,7 +477,8 @@ document.addEventListener('click', async e => {
     case 'start': case 'add': closeSheet(); draft = { method: 'address', name: S.addresses.some(a => a.name === 'Дім') ? 'Робота' : 'Дім' }; view = 'ob-region'; render(); break;
     case 'region': draft.regionId = t.dataset.id; draft.city = ''; draft.queue = null; view = 'ob-city'; render(); break;
     case 'city-next': { const v = document.getElementById('city').value.trim(); if (!v) { document.getElementById('city').focus(); break; } if (v !== draft.city) { draft.nsId = null; } draft.city = v; draft.street = draft.street || ''; view = 'ob-method'; render(); break; }
-    case 'method': draft.method = t.dataset.v; if (view === 'ob-address') view = 'ob-queue'; render(); break;
+    // натиск на картку способу одразу веде далі — кнопка «Продовжити» не обов'язкова
+    case 'method': draft.method = t.dataset.v; view = view === 'ob-method' ? (draft.method === 'address' ? 'ob-address' : 'ob-queue') : view === 'ob-address' ? 'ob-queue' : view; render(); break;
     case 'method-next': view = draft.method === 'address' ? 'ob-address' : 'ob-queue'; render(); break;
     case 'address-next': draft.street = document.getElementById('street').value.trim(); draft.house = document.getElementById('house').value.trim(); view = draft.autoQueue ? 'ob-confirm' : 'ob-queue'; render(); break;
     case 'queue': draft.queue = t.dataset.v; render(); break;
