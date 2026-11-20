@@ -40,9 +40,9 @@ async function probe() { // тимчасово: як влаштовано пош
     const st = await g('/streets/26499?term=%D0%A1%D0%BE%D0%B1%D0%BE%D1%80'); console.log('TRY streets:', st[0], st[1].slice(0, 400));
     const sid = (JSON.parse(st[1])[0] || {}).id;
     const hs = await g('/houses/' + sid); console.log('TRY houses:', hs[0], hs[1].slice(0, 300));
-    const h0 = JSON.parse(hs[1])[0];
-    const ev = await g('/shutdown-events', { streetId: sid, house: h0 }); console.log('TRY events:', ev[0], ev[1].replace(/\s+/g, ' ').slice(0, 3000));
-    const all = await g('/streets/26499?term='); console.log('TRY streets-all:', all[0], all[1].length);
+    const hl = JSON.parse(hs[1]); for (const h0 of [hl[hl.length - 1], hl[5]]) {
+    const ev = await g('/shutdown-events', { streetId: sid, house: h0 }); console.log('TRY events', h0, ':', ev[0], ev[1].replace(/\s+/g, ' ').slice(0, 1500)); }
+    const all = await g('/streets/26499?term='); console.log('TRY streets-all:', all[0], all[1].slice(0, 300)); const ss = await g('/settlements?term=%D0%BC.'); console.log('TRY settl-m:', ss[0], ss[1].slice(0, 300));
   } catch (e) { console.log('probe error', e.message); }
 }
 
