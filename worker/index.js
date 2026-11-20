@@ -39,6 +39,12 @@ export default {
       if (p === '/api/vapid') return json({ key: (await vapidKeys(env)).publicB64 });
       if (p === '/api/push/subscribe' && req.method === 'POST') return json(await subscribe(env, await req.json()));
       if (p === '/api/push/unsubscribe' && req.method === 'POST') return json(await unsubscribe(env, (await req.json()).endpoint));
+      // діагностика підписок (без ендпоінтів і ключів), лише з секретом
+      if (p === '/api/internal/push-state') {
+        if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
+        const subs = await getSubs(env);
+        return json({ count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), seen: (x.seen || []).length })) });
+      }
       if (p === '/api/push/test' && req.method === 'POST') {
         const { endpoint } = await req.json(); const subs = await getSubs(env); const s = subs[await idOf(endpoint)];
         if (!s) return json({ ok: false, error: 'not subscribed' }, 404);
@@ -133,7 +139,7 @@ async function tick(env, manual = false) {
   const ids = Object.keys(subs);
   if (!ids.length) return status;
   // Хмельницька: раз на годину дивимось події підписаних адрес — так запам'ятовуємо їхню свіжу чергу (видно лише в подіях)
-  if (now.min < 15) { const seenA = new Set(); for (const s of Object.values(subs)) for (const a of s.addrs || []) {
+  if (now.min % 60 < 15) { const seenA = new Set(); for (const s of Object.values(subs)) for (const a of s.addrs || []) {
     if (a.op !== 'hoe' || !a.street || !a.house) continue; const k = `${a.city}|${a.street}|${a.house}`; if (seenA.has(k) || seenA.size >= 10) continue; seenA.add(k);
     await hoeLive({ city: a.city, street: a.street, house: a.house }, { waitUntil: () => {} }, env).catch(() => null); } }
   const outbox = []; let seenChanged = false;
