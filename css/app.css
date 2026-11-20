@@ -311,3 +311,4 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:non
 /* верхній блок (адреса, дзвіночок) — завжди над лампою, світінням і розмиттям (iOS Safari виносить filter у власні шари) */
 .stage .glow,.stage .lamp,.stage .beam{z-index:0}
 .stage .loc,.stage .loc+*,.stage .tile.round{position:relative;z-index:3;transform:translateZ(0)}
+.btn.sm{height:34px;padding:0 12px;font-size:13px;width:auto}

@@ -1,6 +1,6 @@
 import { setLang, LANGS, detectLang, locale, tr } from './i18n.js';
 import { ic, STATE_ICON } from './icons.js';
-import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, FILE_ADDR, skel, isYasno, yasnoGroup, isPw } from './address.js';
+import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, FILE_ADDR, skel, isYasno, yasnoGroup, isPw, hoeIndex, hoeCity, pq } from './address.js';
 import { API, API_READY } from './config.js';
 import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr, freeDay } from './data.js';
 
@@ -239,7 +239,9 @@ function sourceLine(data, a) {
   return `<a class="source ok" href="${esc(data.source?.url || '#')}" target="_blank" rel="noopener">${ic('shield')}${esc(data.name || region(a.regionId)?.opName)} · ${when}${via} ${ic('external')}</a>`;
 }
 function banners(data) {
-  let b = '';
+  let b = ''; const a = cur();
+  if (a?.qChange) b += `<div class="banner warn">${ic('refresh')}<div><div class="bt">Черга змінилася: ${esc(a.qChange.from)} → ${esc(a.qChange.to)}</div><div class="bb">За свіжими даними ${esc(region(a.regionId).opName)} ваш будинок тепер у черзі ${esc(a.qChange.to)}. Графік уже показано для нової черги.</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" data-act="q-ok">Зрозуміло</button><button class="btn sm ghost" data-act="q-undo">Повернути ${esc(a.qChange.from)}</button></div></div></div>`;
+  if (a?.qSuggest) b += `<div class="banner warn">${ic('alert')}<div><div class="bt">Оператор вказує іншу чергу: ${esc(a.qSuggest)}</div><div class="bb">У застосунку для «${esc(a.name)}» обрано ${esc(a.queue)}, а за даними ${esc(region(a.regionId).opName)} адреса ${esc(a.street)}, ${esc(a.house)} — у черзі ${esc(a.qSuggest)}.</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" data-act="q-accept">Перейти на ${esc(a.qSuggest)}</button><button class="btn sm ghost" data-act="q-keep">Залишити ${esc(a.queue)}</button></div></div></div>`;
   if (data?.notice) b += `<div class="banner warn">${ic('alert')}<div><div class="bt">Оголошення оператора</div><div class="bb">${esc(data.notice)}</div></div></div>`;
   if (!navigator.onLine) b += `<div class="banner warn">${ic('wifi-off')}<div><div class="bt">Немає з’єднання</div><div class="bb">Показуємо збережений графік.</div></div></div>`;
   if (data.demo) b += `<div class="banner demo">${ic('info')}<div><div class="bt">Це демо-графік</div><div class="bb">Реальні дані оператора підключимо найближчим часом. Не орієнтуйтеся на ці інтервали.</div></div></div>`;
@@ -424,6 +426,47 @@ async function refreshNow() {
     await render(); await refreshAddrs(); return true;
   } finally { refreshing = false; }
 }
+// ---------- Щотижнева перевірка черг за адресою ----------
+// Оператори іноді переносять будинки в інші черги. Раз на тиждень для кожної адреси з вулицею й будинком питаємо чергу
+// в того самого джерела, що й під час додавання. Якщо черга визначалась автоматично — оновлюємо й показуємо банер
+// «Черга змінилася» (з можливістю повернути). Якщо її обрали вручну — лише пропонуємо («Оператор вказує іншу чергу»).
+const hk = x => String(x || '').toLowerCase().replace(/[\s-]+/g, '').replace(/[’'ʼ]/g, '');
+async function lookupQueue(a) {
+  const r = region(a.regionId); if (!r || !a.street || !a.house) return null; const s = a.src || {};
+  const ok = new Set(queueList(r.queues)); const one = qs => { const u = [...new Set((qs || []).map(x => String(x).trim()).filter(x => ok.has(x)))]; return u.length === 1 ? u[0] : null; };
+  if (FILE_ADDR.has(r.op)) {
+    let ids = s.hoeId ? [s.hoeId] : ((await hoeIndex(r.op))?.items || []).filter(([c]) => skel(c) === skel(a.city)).map(x => x[2]);
+    for (const id of ids) { const hs = (await hoeCity(r.op, id))[a.street]; if (!hs) continue;
+      const h = hs.find(x => hk(x[0]) === hk(a.house)) || (hs.length === 1 && hs[0][0] === '*' ? hs[0] : null); return h ? one(h[1].split(',')) : null; }
+    return null;
+  }
+  if (isYasno(r)) return s.streetId && s.yasnoHouse ? (await yasnoGroup(r.op, s.streetId, s.yasnoHouse, s.yasnoCity)) || null : null;
+  if (isPw(r) && r.op !== 'choe') {
+    const cid = a.cid || ((await pq('cities', { op: r.op })).find(c => skel(c.label) === skel(a.city)) || {}).id; if (!cid) return null;
+    const sid = s.streetId || ((await pq('streets', { op: r.op, cityId: cid })).find(x => skel(x.label) === skel(a.street)) || {}).id; if (!sid) return null;
+    if (r.op === 'poe-poltava') return (await pq('queue', { op: r.op, cityId: cid, streetId: sid, house: a.house })).queue || null;
+    const h = (await pq('houses', { op: r.op, cityId: cid, streetId: sid })).find(x => hk(x.label) === hk(a.house)); return h?.queues ? one(h.queues) : null;
+  }
+  if (s.moeId && r.addressLookup === 'moe') { const q = await moeAddr.queue(s.moeId); const g = q.find(x => x.outageType?.name === 'ГПВ') || q[0]; return g?.outage?.name || null; }
+  return null;
+}
+let qChecking = false;
+async function recheckQueues(force) {
+  if (qChecking || !navigator.onLine) return; qChecking = true; let any = false;
+  try {
+    for (const a of S.addresses) {
+      if (!a.street || !a.house || (!force && Date.now() - (a.qAt || 0) < 7 * 864e5)) continue;
+      let q = null; try { q = await lookupQueue(a); } catch { continue; } // джерело недоступне — спробуємо наступного разу
+      a.qAt = Date.now(); any = true;
+      if (!q || q === a.queue) { delete a.qSuggest; continue; }
+      if (a.auto) { a.qChange = { from: a.queue, to: q, at: Date.now() }; a.queue = q; }
+      else if (a.qKeep !== q) a.qSuggest = q;
+    }
+  } finally { qChecking = false; }
+  if (any) { save(); syncPush(); if (view === 'home') render(); }
+}
+setTimeout(() => recheckQueues(), 4000);
+
 function toast(t) { document.querySelector('.toast')?.remove(); const d = document.createElement('div'); d.className = 'toast'; d.innerHTML = ic('check') + esc(t); document.body.append(d); setTimeout(() => d.remove(), 3500); }
 
 async function segSheet(i) {
@@ -491,6 +534,10 @@ document.addEventListener('click', async e => {
   if (t.dataset.day) { day = +t.dataset.day; return render(); }
   if (t.dataset.ob) { if (t.dataset.ob === 'back-addresses') { view = 'addresses'; draft = null; } else view = t.dataset.ob; return render(); }
   switch (act) {
+    case 'q-ok': { const a = cur(); delete a.qChange; save(); syncPush(); render(); break; }
+    case 'q-undo': { const a = cur(); a.queue = a.qChange.from; a.auto = false; delete a.qChange; save(); syncPush(); render(); toast(`Залишено чергу ${a.queue}`); break; }
+    case 'q-accept': { const a = cur(); a.queue = a.qSuggest; a.auto = true; delete a.qSuggest; a.qKeep = null; save(); syncPush(); render(); toast(`Чергу змінено на ${a.queue}`); break; }
+    case 'q-keep': { const a = cur(); a.qKeep = a.qSuggest; delete a.qSuggest; save(); syncPush(); render(); break; }
     case 'close': closeSheet(); break;
     case 'start': case 'add': closeSheet(); draft = { method: 'address', name: S.addresses.some(a => a.name === 'Дім') ? 'Робота' : 'Дім' }; view = 'ob-region'; render(); break;
     case 'region': draft.regionId = t.dataset.id; draft.city = ''; draft.queue = null; view = 'ob-city'; render(); break;
@@ -502,7 +549,9 @@ document.addEventListener('click', async e => {
     case 'queue': draft.queue = t.dataset.v; render(); break;
     case 'queue-next': if (draft.editOf) { const a = S.addresses.find(x => x.id === draft.editOf); a.queue = draft.queue; save(); syncPush(); draft = null; view = 'edit'; toast('Чергу змінено'); } else view = 'ob-confirm'; render(); break;
     case 'dname': draft.name = t.dataset.v; render(); break;
-    case 'save': { const a = { id: uid(), name: draft.name, regionId: draft.regionId, city: draft.city, street: draft.street || '', house: draft.house || '', queue: draft.queue, ...(draft.pwCity ? { cid: draft.pwCity } : {}) };
+    case 'save': { const a = { id: uid(), name: draft.name, regionId: draft.regionId, city: draft.city, street: draft.street || '', house: draft.house || '', queue: draft.queue, ...(draft.pwCity ? { cid: draft.pwCity } : {}),
+        // звідки черга: для щотижневої перевірки (оператори іноді переносять будинки в інші черги)
+        auto: !!(draft.method === 'address' && draft.autoQueue), src: { hoeId: draft.hoeId || null, streetId: draft.streetId || null, yasnoCity: draft.yasnoCity || null, yasnoHouse: draft.yasnoHouse || null, moeId: draft.moeId || null }, qAt: Date.now() };
       S.addresses.push(a); if (!S.primaryId) S.primaryId = a.id; S.currentId = a.id; save(); syncPush(); draft = null; view = 'home'; day = 0; await render(); toast(`Адресу «${a.name}» збережено`); break; }
     case 'switcher': if (e.target.closest('[data-act=notif]')) { notifSheet(); break; } switcherSheet(); break;
     case 'notif': notifSheet(); break;
@@ -634,6 +683,7 @@ function initAddress() {
   const setupHouse = () => { houseSrc = houseSource(r, draft);
     if (houseSrc && !houseTA) houseTA = attachTypeahead(hs, q => houseSrc ? houseSrc(q) : Promise.resolve([]), it => {
       draft.house = it.label;
+      draft.yasnoHouse = it.yasnoHouse || null; draft.moeId = it.id || null;
       if (it.yasnoHouse) { res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Шукаємо чергу для адреси…</div></div>`;
         return yasnoGroup(r.op, draft.streetId, it.yasnoHouse, draft.yasnoCity).then(q => q ? found(q, 'YASNO') : notFound('YASNO не повернув групу для цього будинку.')).catch(() => notFound('Сервіс YASNO зараз не відповідає.')); }
       // черга будинку на сервері оператора (Полтаваобленерго): питаємо при виборі будинку

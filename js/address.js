@@ -49,7 +49,7 @@ async function moeSettlements() {
 // index.json { items: [[населений пункт, РЕМ/дільниця, id]] }, <id>.json { вулиця: [[будинок, "1.1,2.2"], …] }
 export const FILE_ADDR = new Set(['hoe', 'chernoe']);
 const fileIdx = {}; const fileCity = {};
-const hoeIndex = op => fileIdx[op] ||= fetch(`data/addr/${op}/index.json`).then(r => r.ok ? r.json() : null).catch(() => null);
+export const hoeIndex = op => fileIdx[op] ||= fetch(`data/addr/${op}/index.json`).then(r => r.ok ? r.json() : null).catch(() => null);
 export const hoeCity = (op, id) => fileCity[op + id] ||= fetch(`data/addr/${op}/${id}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(e => { delete fileCity[op + id]; throw e; });
 // Черга для всієї вулиці (у файлі будинки не перелічені)
 export async function hoeStreetQueue(op, draft) {
