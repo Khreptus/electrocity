@@ -356,6 +356,8 @@ function regionMatch(x, q) {
 // Де оператор показує чергу за адресою (якщо автоматично визначити не вдалося)
 const QUEUE_LOOKUP = {
   hoe: 'https://hoe.com.ua/shutdown/queue',
+  loe: 'https://poweron.loe.lviv.ua/',
+  moe: 'https://off.energy.mk.ua/',
   zhoe: 'https://www.ztoe.com.ua/unhooking-search.php',
   choe: 'https://www.cherkasyoblenergo.com/off',
   roe: 'https://www.roe.vsei.ua/disconnections',
@@ -455,7 +457,7 @@ async function lookupQueue(a) {
   if (s.moeId && r.addressLookup === 'moe') { const q = await moeAddr.queue(s.moeId); const g = q.find(x => x.outageType?.name === 'ГПВ') || q[0]; return g?.outage?.name || null; }
   return null;
 }
-const QFRESH = Date.parse('2026-11-20T12:30:00Z');
+const QFRESH = Date.parse('2026-11-20T17:45:00Z');
 let qChecking = false;
 async function recheckQueues(force) {
   if (qChecking || !navigator.onLine) return; qChecking = true; let any = false;
@@ -466,7 +468,8 @@ async function recheckQueues(force) {
       let q = null; try { q = await lookupQueue(a); } catch { continue; } // джерело недоступне — спробуємо наступного разу
       a.qAt = Date.now(); any = true;
       if (!q || q === a.queue) { delete a.qSuggest; continue; }
-      if (a.auto) { a.qChange = { from: a.queue, to: q, at: Date.now() }; a.queue = q; }
+      // автоматична черга (або давня адреса, де спосіб вибору не записано) — оновлюємо з банером і кнопкою «Повернути»
+      if (a.auto || a.auto === undefined) { a.qChange = { from: a.queue, to: q, at: Date.now() }; a.queue = q; a.auto = true; }
       else if (a.qKeep !== q) a.qSuggest = q;
     }
   } finally { qChecking = false; }
@@ -690,8 +693,10 @@ function initAddress() {
   };
   let houseTA = null;
   const found = (q, by) => { draft.queue = q; draft.autoQueue = true;
-    res.innerHTML = `<div class="card" style="background:var(--on-soft);box-shadow:none;gap:8px"><div style="display:flex;gap:10px;align-items:center;font-weight:600;color:var(--on-ink)">${ic('check')}Вашу адресу знайдено</div><div style="display:flex;gap:8px;align-items:baseline"><span class="body-s">Черга</span><span class="mono" style="font-size:20px;font-weight:600">${esc(q)}</span></div><div class="source ok">${ic('shield')}Визначено за даними ${esc(by)}</div></div>`;
-    next.textContent = 'Продовжити'; };
+    res.innerHTML = `<div class="card" style="background:var(--on-soft);box-shadow:none;gap:8px"><div style="display:flex;gap:10px;align-items:center;font-weight:600;color:var(--on-ink)">${ic('check')}Вашу адресу знайдено</div><div style="display:flex;gap:8px;align-items:baseline"><span class="body-s">Черга</span><span class="mono" style="font-size:20px;font-weight:600">${esc(q)}</span></div><div class="source ok">${ic('shield')}Визначено за даними ${esc(by)}</div>
+      <div class="bb" style="margin-top:4px">${ic('alert')} Обленерго могло змінити вашу чергу. Перевірте її${QUEUE_LOOKUP[r.op] ? ` <a href="${QUEUE_LOOKUP[r.op]}" target="_blank" rel="noopener">на сайті ${esc(r.opName)}</a>` : ' на сайті обленерго'} і підтвердьте. Якщо черга інша — змініть її вручну.</div>
+      <button class="btn sm ghost" data-ob="ob-queue" style="margin-top:4px">Змінити вручну</button></div>`;
+    next.textContent = `Підтвердити чергу ${q}`; };
   const notFound = why => { draft.autoQueue = false; res.innerHTML = `<div class="banner warn">${ic('alert')}<div><div class="bt">Чергу не вдалося визначити автоматично</div><div class="bb">${why} Оберіть чергу вручну на наступному кроці.</div></div></div>`; next.textContent = 'Обрати чергу вручну'; };
   let houseSrc = null;
   const setupHouse = () => { houseSrc = houseSource(r, draft);

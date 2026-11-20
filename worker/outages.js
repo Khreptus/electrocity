@@ -413,6 +413,8 @@ export async function poeAddress({ city, street, house, cid }, nowIso, ctx) {
 // POST /shutdown-events {streetId, house} → таблиця «Вид робіт | Тип | Черга (ГПВ) | Черга (ГАВ) | Початок | Кінець».
 // Черга будинку видно в рядках ГПВ — це свіжіше за файли черг (вони від 09.10.2026).
 const HOE = 'https://hoe.com.ua';
+// streetId:будинок → черга, перевірена власником вручну на сайті обленерго (20.11.2026)
+const HOE_KNOWN = { '281090:20/7': { q: ['2.1'], at: '2026-11-20T17:40:00Z' } };
 const hoeGet = (path, form) => fetch(HOE + path, { method: form ? 'POST' : 'GET', headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) }, ...(form ? { body: new URLSearchParams(form) } : {}) })
   .then(r => { if (!r.ok) throw new Error(`Хмельницькобленерго: HTTP ${r.status}`); return form ? r.text() : r.json(); });
 const hoeT = s => { const m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{1,2}):(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2, '0')}:${m[5]}` : null; };
@@ -441,12 +443,15 @@ export async function hoeLive({ city, street, house }, ctx, env) {
     // Черга видно лише в подіях. Запам'ятовуємо останню побачену (KV, пишемо лише при зміні), щоб знати її й тоді,
     // коли відключень за адресою зараз немає.
     let queues = hoeQueueFrom(rows), queuesAt = queues.length ? new Date().toISOString() : null, memory = false;
+    // Черги, підтверджені вручну (користувач перевірив на сайті обленерго), — поки сайт не покаже свіжішу
+    const known = HOE_KNOWN[`${st.id}:${houseKey(h)}`];
     const mk = `hoeq:${st.id}:${houseKey(h)}`;
     if (env?.KV) {
       const prev = await env.KV.get(mk, 'json').catch(() => null);
       if (queues.length) { if (!prev || prev.q.join() !== queues.join()) await env.KV.put(mk, JSON.stringify({ q: queues, at: queuesAt })).catch(() => {}); }
       else if (prev?.q?.length) { queues = prev.q; queuesAt = prev.at; memory = true; }
     }
+    if (!queues.length && known) { queues = known.q; queuesAt = known.at; memory = true; }
     return { found: true, rows, queues, queuesAt, memory };
   });
 }
