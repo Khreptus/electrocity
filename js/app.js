@@ -308,6 +308,7 @@ function edit() {
     <div class="li"><span class="lt">${ic('map-pin')}</span><span class="tx"><span class="tt">${esc(addrLine(a) || 'Адресу не вказано')}</span></span></div>
     <button class="li" data-act="requeue"><span class="lt">${ic('grid')}</span><span class="tx"><span class="tt">Черга ${esc(a.queue)}</span><br><span class="st">Змінити чергу</span></span>${ic('chevron-right', 'chev')}</button>
     <button class="li" data-act="primary"><span class="lt">${ic('star')}</span><span class="tx"><span class="tt">Основна адреса</span></span><span class="toggle" role="switch" aria-checked="${S.primaryId === a.id}"></span></button>
+    <button class="li" data-act="addr-notify"><span class="lt">${ic('bell')}</span><span class="tx"><span class="tt">Сповіщення для цієї адреси</span><br><span class="st">${!S.notify.enabled ? 'Спершу увімкніть сповіщення в Налаштуваннях' : a.notify === false ? 'Вимкнено — інші адреси не зачіпає' : 'Графік, зміни й аварії за адресою'}</span></span><span class="toggle" role="switch" aria-checked="${a.notify !== false}"></span></button>
    </div>
    <button class="btn danger" data-act="delete">${ic('trash')} Видалити адресу</button></section>`;
 }
@@ -526,7 +527,7 @@ async function pushSub(create) {
 async function syncPush() {
   if (!S.notify.enabled || !API_READY) return;
   try { const sub = await pushSub(false); if (!sub) return;
-    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, lang: S.lang, addrs: S.addresses.map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name, city: a.city, street: a.street, house: a.house })) }) });
+    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, lang: S.lang, addrs: S.addresses.filter(a => a.notify !== false).map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name, city: a.city, street: a.street, house: a.house })) }) });
   } catch {}
 }
 
@@ -564,6 +565,7 @@ document.addEventListener('click', async e => {
     case 'edit': editId = t.dataset.id; view = 'edit'; render(); break;
     case 'rename': { const a = S.addresses.find(x => x.id === editId); a.name = t.dataset.v; save(); syncPush(); render(); break; }
     case 'primary': S.primaryId = editId; save(); render(); break;
+    case 'addr-notify': { const a = S.addresses.find(x => x.id === editId); a.notify = a.notify === false; save(); syncPush(); render(); toast(a.notify ? `Сповіщення для «${a.name}» увімкнено` : `Сповіщення для «${a.name}» вимкнено`); break; }
     case 'requeue': { const a = S.addresses.find(x => x.id === editId); draft = { regionId: a.regionId, queue: a.queue, editOf: a.id, method: 'queue' }; view = 'ob-queue'; render(); break; }
     case 'delete': { const a = S.addresses.find(x => x.id === editId); if (!confirm(tr(`Видалити «${a.name}»? Адресу буде видалено з цього пристрою.`))) break;
       S.addresses = S.addresses.filter(x => x.id !== editId); if (S.primaryId === editId) S.primaryId = S.addresses[0]?.id || null; if (S.currentId === editId) S.currentId = S.primaryId; save(); syncPush(); view = S.addresses.length ? 'addresses' : 'welcome'; render(); toast('Адресу видалено'); break; }
