@@ -45,6 +45,10 @@ export default {
         const subs = await getSubs(env);
         return json({ count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), seen: (x.seen || []).length })) });
       }
+      if (p === '/api/internal/push-run') { // запустити розсилку зараз і показати, що надіслано
+        if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
+        await tick(env, false); return json({ lastPush, stored: await env.KV.get('lastpush', 'json') });
+      }
       if (p === '/api/push/test' && req.method === 'POST') {
         const { endpoint } = await req.json(); const subs = await getSubs(env); const s = subs[await idOf(endpoint)];
         if (!s) return json({ ok: false, error: 'not subscribed' }, 404);
@@ -91,6 +95,7 @@ export default {
   },
 };
 
+let lastPush = null;
 // ---------- збір + сповіщення (раз на 15 хв) ----------
 async function tick(env, manual = false) {
   const now = kyiv();
@@ -165,11 +170,14 @@ async function tick(env, manual = false) {
       }
     }
   }
-  let dead = false;
+  let dead = false; const sent = [];
   await Promise.all(outbox.map(async o => {
-    const r = await sendPush(env, subs[o.id].sub, localize(o.msg, subs[o.id].lang)).catch(() => ({ status: 0 }));
+    const r = await sendPush(env, subs[o.id].sub, localize(o.msg, subs[o.id].lang)).catch(e => ({ status: 0, err: String(e?.message || e) }));
+    sent.push({ title: o.msg.title, status: r.status, err: r.err });
     if (r.status === 404 || r.status === 410) { delete subs[o.id]; dead = true; }
   }));
+  lastPush = { at: new Date().toISOString(), now: now.min, subs: ids.length, outbox: outbox.length, sent };
+  if (outbox.length) await env.KV.put('lastpush', JSON.stringify(lastPush)).catch(() => {}); // останнє надсилання — для діагностики
   if (dead || seenChanged) await env.KV.put('subs', JSON.stringify(subs));
 }
 
