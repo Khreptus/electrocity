@@ -452,12 +452,14 @@ async function lookupQueue(a) {
   if (s.moeId && r.addressLookup === 'moe') { const q = await moeAddr.queue(s.moeId); const g = q.find(x => x.outageType?.name === 'ГПВ') || q[0]; return g?.outage?.name || null; }
   return null;
 }
+const QFRESH = Date.parse('2026-11-20T12:30:00Z');
 let qChecking = false;
 async function recheckQueues(force) {
   if (qChecking || !navigator.onLine) return; qChecking = true; let any = false;
   try {
     for (const a of S.addresses) {
-      if (!a.street || !a.house || (!force && Date.now() - (a.qAt || 0) < 7 * 864e5)) continue;
+      // QFRESH — час, коли з'явилося нове джерело черг; давніші перевірки вважаємо застарілими
+      if (!a.street || !a.house || (!force && Date.now() - (a.qAt || 0) < 7 * 864e5 && (a.qAt || 0) > QFRESH)) continue;
       let q = null; try { q = await lookupQueue(a); } catch { continue; } // джерело недоступне — спробуємо наступного разу
       a.qAt = Date.now(); any = true;
       if (!q || q === a.queue) { delete a.qSuggest; continue; }
