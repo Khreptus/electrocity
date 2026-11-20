@@ -444,7 +444,8 @@ export async function addressStatus(env, params, ctx, nowIso) {
     const live = await hoeLive({ city, street, house }, ctx).catch(() => null);
     if (live?.found) {
       const items = live.rows.filter(r => !r.end || !nowIso || r.end > nowIso).map(r => ({
-        kind: /погодинн/i.test(r.work) ? 'schedule' : /аварі/i.test(r.type) ? 'emergency' : 'planned',
+        // як на сайті обленерго: тип «Аварійне» (зокрема для ГПВ) — аварійне відключення, інакше планове
+        kind: /аварі/i.test(r.type) ? 'emergency' : 'planned',
         reason: r.work, start: r.start, end: r.end, scope: 'house', source: 'Хмельницькобленерго', queue: r.gpv.join(', ') }));
       return { ok: true, supported: true, found: true, checkedAt: new Date().toISOString(), items, queue: hoeQueueFrom(live.rows), source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/new' };
     }
