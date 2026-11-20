@@ -36,15 +36,13 @@ export function parseSheet(rows) {
 
 async function probe() { // тимчасово: як влаштовано пошук черги hoe.com.ua/shutdown/new
   try {
-    const h = await (await fetch('https://hoe.com.ua/shutdown/new', { headers: { 'User-Agent': UA } })).text();
-    console.log('NEW attrs:', JSON.stringify([...h.matchAll(/<[^>]*(data-url[^>]*|captcha[^>]*)>/gi)].map(m => m[0].slice(0, 300)).slice(0, 20)));
-    const i0 = h.search(/select-settlment/); console.log('NEW html:', h.slice(Math.max(0, i0 - 1500), i0 + 1500).replace(/\s+/g, ' '));
-    const js = await (await fetch('https://hoe.com.ua' + (h.match(/src="(\/bundles\/js[^"]+)"/) || [])[1], { headers: { 'User-Agent': UA } })).text();
-    const k = js.indexOf('Shutdown'); const k2 = js.indexOf('Shutdown =') >= 0 ? js.indexOf('Shutdown =') : js.indexOf('var Shutdown');
-    console.log('SHUTDOWN JS:', js.slice(k2 + 5800, k2 + 11000).replace(/\s+/g, ' '));
-    const g = async u => { const r = await fetch('https://hoe.com.ua' + u, { headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest' } }); return r.status + ' ' + (await r.text()).slice(0, 400).replace(/\s+/g, ' '); };
-    console.log('TRY settlements:', await g('/settlements?term=%D0%A5%D0%BC%D0%B5%D0%BB%D1%8C'));
-    console.log('TRY settlements2:', await g('/settlements/?q=%D0%A5%D0%BC%D0%B5%D0%BB%D1%8C'));
+    const g = async (u, o) => { const r = await fetch('https://hoe.com.ua' + u, { headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', ...(o ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) }, ...(o ? { method: 'POST', body: new URLSearchParams(o) } : {}) }); return [r.status, await r.text()]; };
+    const st = await g('/streets/26499?term=%D0%A1%D0%BE%D0%B1%D0%BE%D1%80'); console.log('TRY streets:', st[0], st[1].slice(0, 400));
+    const sid = (JSON.parse(st[1])[0] || {}).id;
+    const hs = await g('/houses/' + sid); console.log('TRY houses:', hs[0], hs[1].slice(0, 300));
+    const h0 = JSON.parse(hs[1])[0];
+    const ev = await g('/shutdown-events', { streetId: sid, house: h0 }); console.log('TRY events:', ev[0], ev[1].replace(/\s+/g, ' ').slice(0, 3000));
+    const all = await g('/streets/26499?term='); console.log('TRY streets-all:', all[0], all[1].length);
   } catch (e) { console.log('probe error', e.message); }
 }
 
