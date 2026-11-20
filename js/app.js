@@ -102,7 +102,7 @@ function fetchAddr(a) {
   if (r && Date.now() - r.t < 120e3) return Promise.resolve(false);
   return addrInflight[key] ||= (async () => {
     try {
-      const q = new URLSearchParams({ op, city: a.city, street: a.street, house: a.house, ...(a.cid ? { cid: a.cid } : {}) });
+      const q = new URLSearchParams({ op, city: a.city, street: a.street, house: a.house, ...(a.cid ? { cid: a.cid } : {}), ...(freshAddr ? { fresh: '1' } : {}) });
       const j = op === 'poe-poltava' ? await (await import('./address.js')).poeClient('outage', Object.fromEntries(q)) : await (await fetch(`${API}api/outage?${q}`)).json();
       const changed = !r || JSON.stringify(r.j?.items || []) !== JSON.stringify(j?.items || []);
       addrCache[key] = { t: Date.now(), j }; return changed;
@@ -114,7 +114,7 @@ let addrBusy = false;
 async function refreshAddrs() {
   if (addrBusy) return; addrBusy = true;
   try { const ch = await Promise.all(S.addresses.map(fetchAddr)); if (ch.some(Boolean) && !document.querySelector('.bsheet')) render(); }
-  finally { addrBusy = false; }
+  finally { addrBusy = false; freshAddr = false; }
 }
 async function addrStatus(a) {
   const box = document.getElementById('addr-status'); if (!box) return;
@@ -602,7 +602,14 @@ setInterval(() => { if (['home', 'detail', 'addresses'].includes(view) && !docum
 // Відкрили застосунок (або повернулися до нього) — тихо просимо сервер перевірити сайти обленерго, щоб не чекати
 // планового збору (раз на 15 хв). Не частіше ніж раз на 3 хв з одного пристрою.
 let lastAutoTick = 0;
-function autoRefresh() { if (S.addresses.length && API_READY && Date.now() - lastAutoTick > 180000) { lastAutoTick = Date.now(); refreshNow(); } else render(); }
+// Щоразу при відкритті застосунку (і поверненні до нього) — свіжа перевірка адрес на сайтах обленерго: аварійні відключення
+let freshAddr = false;
+function autoRefresh() {
+  if (!S.addresses.length) return render();
+  freshAddr = true;
+  if (API_READY && Date.now() - lastAutoTick > 180000) { lastAutoTick = Date.now(); refreshNow(); }
+  else { for (const k of Object.keys(addrCache)) delete addrCache[k]; render().then(() => refreshAddrs()); }
+}
 document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefresh(); });
 setTimeout(autoRefresh, 1500);
 

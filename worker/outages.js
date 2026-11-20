@@ -4,6 +4,10 @@
 //    аварійні та планові відключення на сьогодні + 5 днів, з вулицями й будинками;
 //  • ДТЕК — відповідь getHomeNum для будинку (поточне відключення, причина, орієнтовний час).
 
+// Кеш запитів до сайтів обленерго: звичайно 5–10 хв; коли користувач щойно відкрив застосунок (fresh=1) — 1 хв,
+// щоб аварійні відключення за адресою були свіжими, але сайти обленерго не отримували зайвих запитів.
+let freshMode = false;
+const bucket = sec => Math.floor(Date.now() / ((freshMode ? 60 : sec) * 1e3));
 const UA = 'Mozilla/5.0 (compatible; Electrocity/1.0; +https://electrocity.slv463991.workers.dev)';
 const HOE_REMS = { 4: 'Городоцький РЕМ', 23: 'Кам.-Подільський РЕМ', 24: 'Летичівський РЕМ', 12: 'Старокостянтинівський РЕМ', 21: 'Хмельницький РЕМ', 17: 'Шепетівський РЕМ' };
 
@@ -177,7 +181,7 @@ export async function pwAddress(op, { city, street, house }, nowIso, ctx) {
     const streets = await pwCached(`${op}/st/${cid}`, 86400, ctx, async () => (await pwGet(P.api, `/pw_streets?pagination=false&city.id=${cid}`)).map(x => [x.id, x.name]));
     const st = streets.find(([, n]) => streetKey(n) === sk); if (!st) continue;
     const q = `?pagination=false&city.id=${cid}&street.id=${st[0]}`;
-    const ev = await pwCached(`${op}/ev2/${cid}/${st[0]}/${Math.floor(Date.now() / 300e3)}`, 300, ctx, async () => {
+    const ev = await pwCached(`${op}/ev2/${cid}/${st[0]}/${bucket(300)}`, 300, ctx, async () => {
       const [a, p] = await Promise.all([pwGet(P.api, `/pw_accidents${q}`), pwGet(P.api, `/pw_accident_planeds${q}`)]);
       // у коментарях бувають ПІБ заявників і номери їхніх ТУ — коментар не зберігаємо й не показуємо взагалі
       return [...a.map(e => ['emergency', e.dateEvent, e.datePlanIn, e.buildingNames || '']), ...p.map(e => ['planned', e.dateEvent, e.datePlanIn, e.buildingNames || ''])];
@@ -302,7 +306,7 @@ export async function choeAddress({ city, street, house, cid }, nowIso, ctx) {
   const d1 = new Date(Date.parse(d0) + 864e5).toISOString().slice(0, 10);
   const items = [];
   for (const d of depts) for (const sel of [0, 1, 2]) {
-    const ev = await pwCached(`choe/ev/${d}/${sel}/${d0}/${Math.floor(Date.now() / 600e3)}`, 600, ctx, async () =>
+    const ev = await pwCached(`choe/ev/${d}/${sel}/${d0}/${bucket(600)}`, 600, ctx, async () =>
       ((await choeGet(`op=disconn_by_dept&disconn_selector=${sel}&n_date=${dd(d0)}&k_date=${dd(d1)}&dept_id=${d}`)).DISCONNECTIONS || [])
         .filter(e => !/відмін|заверш/i.test(e.STATE_CHAR || '')).map(e => [choeTime(e.DATE_START), choeTime(e.DATE_STOP), e.ADDRESS]));
     for (const [start, end, addr] of ev) {
@@ -338,7 +342,7 @@ export async function cvAddress({ city, street, house }, nowIso, ctx) {
   const jobs = []; for (const di of dists.slice(0, 3)) for (const [type, date] of [[0, d0], [1, d0], [1, d1]]) jobs.push([di, type, date]);
   const items = [];
   await Promise.all(jobs.map(async ([di, type, date]) => {
-    const rows = await pwCached(`cv/${di}/${type}/${date}/${pk}/${word}/${Math.floor(Date.now() / 600e3)}`, 600, ctx, async () => {
+    const rows = await pwCached(`cv/${di}/${type}/${date}/${pk}/${word}/${bucket(600)}`, 600, ctx, async () => {
       const r = await fetch(CVR, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
         body: new URLSearchParams({ v_type: String(type), v_diln: di, v_city: pk.slice(0, 40), v_street: word, v_house: '', v_date: dd(date), v_sort_field: '4', v_sort_type: '0', v_page: '1' }) });
       if (!r.ok) throw new Error(`Чернівціобленерго: HTTP ${r.status}`);
@@ -374,7 +378,7 @@ export const poeStreets = (cid, ctx) => { const [f, c] = cid.split('-'); return 
   (await poePost('search-disconnection-cabinet.php', { operation_type: 'street', filial_id: f, city_id: +c, street_id: '' }) || []).map(x => [String(x.instance_id), String(x.instance_name).trim()])); };
 export const poeHouses = (cid, sid, ctx) => { const [f, c] = cid.split('-'); return pwCached(`poe/h/${cid}/${sid}`, 86400, ctx, async () =>
   (await poePost('search-disconnection-cabinet.php', { operation_type: 'building', filial_id: f, city_id: +c, street_id: +sid }) || []).map(x => String(x.instance_name).trim())); };
-export const poeInfo = (cid, sid, house, ctx) => pwCached(`poe/i/${cid}/${sid}/${house}/${Math.floor(Date.now() / 300e3)}`, 300, ctx, async () =>
+export const poeInfo = (cid, sid, house, ctx) => pwCached(`poe/i/${cid}/${sid}/${house}/${bucket(300)}`, 300, ctx, async () =>
   ((await poePost('disconnectinforesult-cabinet.php', { cityid: cid.split('-')[1], streerid: String(sid), house: String(house) })) || [])[0] || null);
 export const poeQueue = info => (info && /^\d+$/.test(info.gp_qnum_1 || '') && /^\d+$/.test(info.gp_qnum_2 || '')) ? `${info.gp_qnum_1}.${info.gp_qnum_2}` : null;
 const poeTime = s => { const m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{1,2}):(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2, '0')}:${m[5]}` : null; };
@@ -423,7 +427,7 @@ export function hoeQueueFrom(rows) {
 }
 export async function hoeLive({ city, street, house }, ctx) {
   const pk = placeKey(city), sk = streetKey(street);
-  const key = `hoe/live/${pk}/${sk}/${houseKey(house)}/${Math.floor(Date.now() / 300e3)}`;
+  const key = `hoe/live/${pk}/${sk}/${houseKey(house)}/${bucket(300)}`;
   return pwCached(key, 300, ctx, async () => {
     const term = pk.split(/[\s-]/).sort((a, b) => b.length - a.length)[0] || pk;
     const set = (await hoeGet(`/settlements?term=${encodeURIComponent(term)}`)).find(x => placeKey(String(x.text).replace(/\(.*?\)/g, '')) === pk);
@@ -438,6 +442,7 @@ export async function hoeLive({ city, street, house }, ctx) {
 }
 
 export async function addressStatus(env, params, ctx, nowIso) {
+  freshMode = params.get('fresh') === '1';
   const op = params.get('op'), city = params.get('city') || '', street = params.get('street') || '', house = params.get('house') || '';
   if (op === 'hoe') {
     // спершу пошук за адресою на сайті (точно по будинку), інакше — події за РЕМ
