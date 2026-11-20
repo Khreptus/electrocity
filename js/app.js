@@ -95,6 +95,7 @@ const withAddr = (a, segs, d) => {
 };
 const addrInflight = {};
 // Завантажити стан адреси (кеш 2 хв); повертає true, якщо дані змінилися
+let freshAddr = false; // наступні запити адрес — зі свіжим кешем (1 хв) на сервері
 function fetchAddr(a) {
   const op = region(a.regionId)?.op;
   if (!API_READY || !ADDR_OPS.has(op) || !a.street || !a.house) return Promise.resolve(false);
@@ -603,7 +604,6 @@ setInterval(() => { if (['home', 'detail', 'addresses'].includes(view) && !docum
 // планового збору (раз на 15 хв). Не частіше ніж раз на 3 хв з одного пристрою.
 let lastAutoTick = 0;
 // Щоразу при відкритті застосунку (і поверненні до нього) — свіжа перевірка адрес на сайтах обленерго: аварійні відключення
-let freshAddr = false;
 function autoRefresh() {
   if (!S.addresses.length) return render();
   freshAddr = true;
