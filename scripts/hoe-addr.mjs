@@ -46,6 +46,8 @@ async function main() {
     const buf = Buffer.from(await (await fetch(u, { headers: { 'User-Agent': UA } })).arrayBuffer());
     const wb = XLSX.read(buf);
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    // для перевірки формату: заголовок і перші рядки файлу в журналі запуску
+    if (n === 0) console.log('ФОРМАТ:', JSON.stringify(rows.slice(0, 8)));
     const { rem, db } = parseSheet(rows);
     for (const [city, streets] of Object.entries(db)) {
       const id = (++n).toString(36);
