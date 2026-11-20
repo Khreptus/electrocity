@@ -34,7 +34,22 @@ export function parseSheet(rows) {
   return { rem, db };
 }
 
+async function probe() { // тимчасово: як влаштовано пошук черги hoe.com.ua/shutdown/new
+  try {
+    const h = await (await fetch('https://hoe.com.ua/shutdown/new', { headers: { 'User-Agent': UA } })).text();
+    console.log('NEW forms:', JSON.stringify([...h.matchAll(/<(form|input|select)[^>]*>/gi)].map(m => m[0]).slice(0, 30)));
+    console.log('NEW scripts:', JSON.stringify([...h.matchAll(/<script[^>]*src="([^"]+)"/gi)].map(m => m[1])));
+    console.log('NEW inline:', JSON.stringify([...h.matchAll(/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1].replace(/\s+/g, ' ')).filter(t => /url|ajax|fetch|shutdown|captcha|\$\.(get|post)/i.test(t)).map(t => t.slice(0, 2500))));
+    for (const src of [...h.matchAll(/<script[^>]*src="([^"]+)"/gi)].map(m => new URL(m[1], 'https://hoe.com.ua/').href).filter(u => /hoe\.com\.ua/.test(u) && !/jquery|bootstrap|min\.js/i.test(u))) {
+      const t = await (await fetch(src, { headers: { 'User-Agent': UA } })).text();
+      const hits = [...t.matchAll(/.{0,160}(url\s*:|\$\.(?:get|post|ajax)|fetch\(|\/shutdown\/|captcha).{0,240}/gi)].map(m => m[0].replace(/\s+/g, ' ')).slice(0, 25);
+      if (hits.length) console.log('JS', src, JSON.stringify(hits));
+    }
+  } catch (e) { console.log('probe error', e.message); }
+}
+
 async function main() {
+  await probe();
   const html = await (await fetch(PAGE, { headers: { 'User-Agent': UA } })).text();
   const links = [...new Set([...html.matchAll(/href="([^"]+\/xls\/[^"]+\.xlsx)"/gi)].map(m => new URL(m[1].replace(/&amp;/g, '&'), PAGE).href))]
     .filter(u => !/непобут|%D0%BD%D0%B5%D0%BF%D0%BE%D0%B1%D1%83%D1%82/i.test(u));
