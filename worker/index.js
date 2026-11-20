@@ -139,12 +139,15 @@ async function tick(env, manual = false) {
   const changed = sig(status) !== sig(prevStatus);
   if ((now.min % 30 === 0 && !manual) || changed) await env.KV.put('status', JSON.stringify(status)).catch(() => {});
 
-  if (manual) return status;
+  // Ручна перевірка (кнопка «Перевірити», відкриття застосунку) теж може першою побачити новий/змінений графік.
+  // Тоді сповіщення про зміни надсилаємо одразу тут — інакше плановий запуск уже не побачить різниці й нічого не надішле.
+  // Нагадування перед відключенням і аварії за адресою — лише в плановому запуску (щоб не дублювати).
+  if (manual && !changes.length) return status;
   const subs = await getSubs(env);
   const ids = Object.keys(subs);
   if (!ids.length) return status;
   // Хмельницька: раз на годину дивимось події підписаних адрес — так запам'ятовуємо їхню свіжу чергу (видно лише в подіях)
-  if (now.min % 60 < 15) { const seenA = new Set(); for (const s of Object.values(subs)) for (const a of s.addrs || []) {
+  if (!manual && now.min % 60 < 15) { const seenA = new Set(); for (const s of Object.values(subs)) for (const a of s.addrs || []) {
     if (a.op !== 'hoe' || !a.street || !a.house) continue; const k = `${a.city}|${a.street}|${a.house}`; if (seenA.has(k) || seenA.size >= 10) continue; seenA.add(k);
     await hoeLive({ city: a.city, street: a.street, house: a.house }, { waitUntil: () => {} }, env).catch(() => null); } }
   const outbox = []; let seenChanged = false;
@@ -154,10 +157,10 @@ async function tick(env, manual = false) {
       const t = s.types || {};
       for (const c of changes) if (c.op === a.op && c.queue === a.queue && t[c.kind] !== false)
         outbox.push({ id, msg: { title: `${a.name} · ${c.title}`, body: c.body, tag: `${c.kind}-${a.op}-${a.queue}-${c.date}` } });
-      const r = reminder(data[a.op], a, s.lead ?? 30, now, t);
+      const r = manual ? null : reminder(data[a.op], a, s.lead ?? 30, now, t);
       if (r) outbox.push({ id, msg: r });
       // аварія / планові роботи саме за адресою
-      if (t.address !== false && a.street && a.house) {
+      if (!manual && t.address !== false && a.street && a.house) {
         const items = await addrItems(env, a, now).catch(() => []);
         for (const it of items) {
           if (it.kind === 'schedule') continue;
@@ -179,6 +182,7 @@ async function tick(env, manual = false) {
   lastPush = { at: new Date().toISOString(), now: now.min, subs: ids.length, outbox: outbox.length, sent };
   if (outbox.length) await env.KV.put('lastpush', JSON.stringify(lastPush)).catch(() => {}); // останнє надсилання — для діагностики
   if (dead || seenChanged) await env.KV.put('subs', JSON.stringify(subs));
+  return status;
 }
 
 const hhmm = iso => iso ? iso.slice(11, 16) : '…';
