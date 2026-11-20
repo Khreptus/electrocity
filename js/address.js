@@ -75,7 +75,7 @@ const yq = (kind, params) => fetch(`${API}api/yasno/${kind}?${new URLSearchParam
 // Львівобленерго: довідник «Чому немає світла?» з чергою кожного будинку
 export const PW_OPS = new Set(['loe', 'zhoe', 'choe', 'poe-poltava']); // довідники через наш сервер: Львівобленерго (API), Житомиробленерго (форма пошуку)
 export const isPw = region => PW_OPS.has(region.op) && (API_READY || region.op === 'poe-poltava');
-export const pq = (kind, params) => params.op === 'poe-poltava' ? poeClient(kind, params) : fetch(`${API}api/pw/${kind}?${new URLSearchParams(params)}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+export const pq = (kind, params) => params.op === 'poe-poltava' ? poeClient(kind, params) : fetch(`${API}api/pw/${kind}?${new URLSearchParams(kind === 'queue' ? { ...params, _: Date.now() } : params)}`, kind === 'queue' ? { cache: 'no-store' } : {}).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 
 // ---------- Полтаваобленерго: напряму з браузера користувача ----------
 // Сайт poe.pl.ua не відповідає серверам Cloudflare (522), але дозволяє запити з інших сайтів (CORS) — тож довідник адрес,

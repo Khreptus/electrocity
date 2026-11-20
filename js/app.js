@@ -457,7 +457,7 @@ async function lookupQueue(a) {
   if (s.moeId && r.addressLookup === 'moe') { const q = await moeAddr.queue(s.moeId); const g = q.find(x => x.outageType?.name === 'ГПВ') || q[0]; return g?.outage?.name || null; }
   return null;
 }
-const QFRESH = Date.parse('2026-11-20T17:45:00Z');
+const QFRESH = Date.parse('2026-11-20T17:55:00Z');
 let qChecking = false;
 async function recheckQueues(force) {
   if (qChecking || !navigator.onLine) return; qChecking = true; let any = false;
