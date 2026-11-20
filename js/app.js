@@ -437,7 +437,8 @@ async function lookupQueue(a) {
   const r = region(a.regionId); if (!r || !a.street || !a.house) return null; const s = a.src || {};
   const ok = new Set(queueList(r.queues)); const one = qs => { const u = [...new Set((qs || []).map(x => String(x).trim()).filter(x => ok.has(x)))]; return u.length === 1 ? u[0] : null; };
   if (r.op === 'hoe' && API_READY) { const x = await pq('queue', { op: 'hoe', city: a.city, street: a.street, house: a.house }).catch(() => null);
-    if (x?.queues?.length) return x.queues.includes(a.queue) ? a.queue : one(x.queues); }
+    if (x?.queues?.length) return x.queues.includes(a.queue) ? a.queue : one(x.queues);
+    if (x?.found) return null; } // сайт знає будинок, але черги зараз не видно — застарілий файл не пропонуємо
   if (FILE_ADDR.has(r.op)) {
     let ids = s.hoeId ? [s.hoeId] : ((await hoeIndex(r.op))?.items || []).filter(([c]) => skel(c) === skel(a.city)).map(x => x[2]);
     for (const id of ids) { const hs = (await hoeCity(r.op, id))[a.street]; if (!hs) continue;
@@ -714,7 +715,14 @@ function initAddress() {
       // Хмельницька: спершу свіжа черга з пошуку «Відключення за адресою» на сайті обленерго, файли черг (від 09.10) — запасний варіант
       if (r.op === 'hoe' && API_READY) { res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Перевіряємо чергу на сайті обленерго…</div></div>`;
         return pq('queue', { op: 'hoe', city: draft.city, street: draft.street, house: it.label })
-          .then(x => x.queues?.length ? useQueues(x.queues, 'сайтом Хмельницькобленерго') : it.queues ? useQueues(it.queues, 'файлом черг Хмельницькобленерго') : notFound('Оператор не вказав чергу для цього будинку.'))
+          .then(x => {
+            if (x.queues?.length) return useQueues(x.queues, x.memory ? 'сайтом Хмельницькобленерго (за останнім відключенням)' : 'сайтом Хмельницькобленерго');
+            // на сайті зараз немає відключень за адресою — черги не видно; файл обленерго (від 09.10) може бути застарілим
+            const fq = [...new Set((it.queues || []).map(q => q.trim()))];
+            draft.autoQueue = false; next.textContent = 'Обрати чергу вручну';
+            res.innerHTML = `<div class="banner warn">${ic('alert')}<div><div class="bt">Чергу не підтверджено сайтом обленерго</div><div class="bb">Зараз за цією адресою немає відключень, тож сайт не показує чергу.${fq.length ? ` У файлі обленерго від 09.10 — ${fq.map(esc).join(' або ')}, але її могли змінити.` : ''} Перевірте свою чергу на сайті й оберіть її.</div><div class="mq">${fq.map(q => `<button class="btn sm" data-mq="${esc(q)}">${esc(q)} (з файлу)</button>`).join('')}<a class="btn sm ghost" href="https://hoe.com.ua/shutdown/queue" target="_blank" rel="noopener">${ic('external')}Перевірити чергу</a></div></div></div>`;
+            res.querySelectorAll('[data-mq]').forEach(b => b.onclick = () => { found(b.dataset.mq, 'файлом черг Хмельницькобленерго'); draft.autoQueue = false; });
+          })
           .catch(() => it.queues ? useQueues(it.queues, 'файлом черг Хмельницькобленерго') : notFound('Сайт оператора зараз не відповідає.')); }
       if (it.queues) return useQueues(it.queues);
     }, { minChars: 0, emptyText: 'Такого номера немає в довіднику оператора' }); };

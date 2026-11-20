@@ -312,3 +312,4 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:non
 .stage .glow,.stage .lamp,.stage .beam{z-index:0}
 .stage .loc,.stage .loc+*,.stage .tile.round{position:relative;z-index:3;transform:translateZ(0)}
 .btn.sm{height:34px;padding:0 12px;font-size:13px;width:auto}
+.mq{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.mq .btn{width:auto}

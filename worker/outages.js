@@ -425,9 +425,9 @@ export function hoeQueueFrom(rows) {
   const n = {}; for (const r of rows) if (/погодинн/i.test(r.work)) for (const q of r.gpv) n[q] = (n[q] || 0) + 1;
   return Object.keys(n).sort((a, b) => n[b] - n[a]);
 }
-export async function hoeLive({ city, street, house }, ctx) {
+export async function hoeLive({ city, street, house }, ctx, env) {
   const pk = placeKey(city), sk = streetKey(street);
-  const key = `hoe/live/${pk}/${sk}/${houseKey(house)}/${bucket(300)}`;
+  const key = `hoe/live2/${pk}/${sk}/${houseKey(house)}/${bucket(300)}`;
   return pwCached(key, 300, ctx, async () => {
     const term = pk.split(/[\s-]/).sort((a, b) => b.length - a.length)[0] || pk;
     const set = (await hoeGet(`/settlements?term=${encodeURIComponent(term)}`)).find(x => placeKey(String(x.text).replace(/\(.*?\)/g, '')) === pk);
@@ -437,7 +437,17 @@ export async function hoeLive({ city, street, house }, ctx) {
     if (!st) return null;
     const hs = await hoeGet(`/houses/${st.id}`); const h = (hs || []).find(x => houseKey(x) === houseKey(house));
     if (!h) return { found: false };
-    return { found: true, rows: hoeEventRows(await hoeGet('/shutdown-events', { streetId: st.id, house: h })) };
+    const rows = hoeEventRows(await hoeGet('/shutdown-events', { streetId: st.id, house: h }));
+    // Черга видно лише в подіях. Запам'ятовуємо останню побачену (KV, пишемо лише при зміні), щоб знати її й тоді,
+    // коли відключень за адресою зараз немає.
+    let queues = hoeQueueFrom(rows), queuesAt = queues.length ? new Date().toISOString() : null, memory = false;
+    const mk = `hoeq:${st.id}:${houseKey(h)}`;
+    if (env?.KV) {
+      const prev = await env.KV.get(mk, 'json').catch(() => null);
+      if (queues.length) { if (!prev || prev.q.join() !== queues.join()) await env.KV.put(mk, JSON.stringify({ q: queues, at: queuesAt })).catch(() => {}); }
+      else if (prev?.q?.length) { queues = prev.q; queuesAt = prev.at; memory = true; }
+    }
+    return { found: true, rows, queues, queuesAt, memory };
   });
 }
 
@@ -446,13 +456,13 @@ export async function addressStatus(env, params, ctx, nowIso) {
   const op = params.get('op'), city = params.get('city') || '', street = params.get('street') || '', house = params.get('house') || '';
   if (op === 'hoe') {
     // спершу пошук за адресою на сайті (точно по будинку), інакше — події за РЕМ
-    const live = await hoeLive({ city, street, house }, ctx).catch(() => null);
+    const live = await hoeLive({ city, street, house }, ctx, env).catch(() => null);
     if (live?.found) {
       const items = live.rows.filter(r => !r.end || !nowIso || r.end > nowIso).map(r => ({
         // як на сайті обленерго: тип «Аварійне» (зокрема для ГПВ) — аварійне відключення, інакше планове
         kind: /аварі/i.test(r.type) ? 'emergency' : 'planned',
         reason: r.work, start: r.start, end: r.end, scope: 'house', source: 'Хмельницькобленерго', queue: r.gpv.join(', ') }));
-      return { ok: true, supported: true, found: true, checkedAt: new Date().toISOString(), items, queue: hoeQueueFrom(live.rows), source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/new' };
+      return { ok: true, supported: true, found: true, checkedAt: new Date().toISOString(), items, queue: live.queues, source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/new' };
     }
     const r = await hoeAddress(env, { city, street, house }, nowIso, ctx);
     return { ok: true, supported: true, checkedAt: r.at, items: r.items, source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/all' };

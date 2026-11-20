@@ -48,7 +48,7 @@ export default {
       if (p === '/api/outage') { const n = kyiv(); return json(await addressStatus(env, url.searchParams, ctx, `${n.date}T${String(Math.floor(n.min / 60)).padStart(2, '0')}:${String(n.min % 60).padStart(2, '0')}`), 200, { 'Cache-Control': 'public, max-age=120' }); }
       // YASNO (ДТЕК): довідник адрес і група за адресою — Київ (25/902) і Дніпропетровщина (3/301)
       // Львівобленерго: довідник адрес і черга кожного будинку (power-api.loe.lviv.ua)
-      if (p.startsWith('/api/pw/')) return json(await pwDir(p.slice(8), url.searchParams, ctx), 200, { 'Cache-Control': 'public, max-age=3600' });
+      if (p.startsWith('/api/pw/')) { const k = p.slice(8); return json(await pwDir(k, url.searchParams, ctx, env), 200, { 'Cache-Control': k === 'queue' ? 'no-store' : 'public, max-age=3600' }); }
       if (p.startsWith('/api/yasno/')) return json(await yasnoAddr(p.slice(11), url.searchParams, ctx), 200, { 'Cache-Control': 'public, max-age=3600' });
       if (p === '/api/dtek/houses') { const r = await dtekHouses(url.searchParams, ctx, env); return json(r, 200, { 'Cache-Control': r.pending ? 'no-store' : 'public, max-age=3600' }); }
       // службові маршрути для GitHub Actions (секрет DTEK_KEY)
@@ -132,6 +132,10 @@ async function tick(env, manual = false) {
   const subs = await getSubs(env);
   const ids = Object.keys(subs);
   if (!ids.length) return status;
+  // Хмельницька: раз на годину дивимось події підписаних адрес — так запам'ятовуємо їхню свіжу чергу (видно лише в подіях)
+  if (now.min < 15) { const seenA = new Set(); for (const s of Object.values(subs)) for (const a of s.addrs || []) {
+    if (a.op !== 'hoe' || !a.street || !a.house) continue; const k = `${a.city}|${a.street}|${a.house}`; if (seenA.has(k) || seenA.size >= 10) continue; seenA.add(k);
+    await hoeLive({ city: a.city, street: a.street, house: a.house }, { waitUntil: () => {} }, env).catch(() => null); } }
   const outbox = []; let seenChanged = false;
   for (const id of ids) {
     const s = subs[id];
@@ -419,13 +423,13 @@ async function poeDir(kind, q, ctx) {
 }
 
 // Хмельницькобленерго: черга будинку з пошуку «Відключення за адресою»
-async function hoeQueueApi(q, ctx) {
-  const live = await hoeLive({ city: q.get('city') || '', street: q.get('street') || '', house: q.get('house') || '' }, ctx);
-  return { found: !!live?.found, queues: live?.found ? hoeQueueFrom(live.rows) : [] };
+async function hoeQueueApi(q, ctx, env) {
+  const live = await hoeLive({ city: q.get('city') || '', street: q.get('street') || '', house: q.get('house') || '' }, ctx, env);
+  return { found: !!live?.found, queues: live?.queues || [], at: live?.queuesAt || null, memory: !!live?.memory };
 }
 
-async function pwDir(kind, q, ctx) {
-  if (q.get('op') === 'hoe' && kind === 'queue') return hoeQueueApi(q, ctx);
+async function pwDir(kind, q, ctx, env) {
+  if (q.get('op') === 'hoe' && kind === 'queue') return hoeQueueApi(q, ctx, env);
   if (q.get('op') === 'poe-poltava') return poeDir(kind, q, ctx);
   if (q.get('op') === 'zhoe') return ztDir(kind, q, ctx);
   if (q.get('op') === 'choe') return choeDir(kind, q, ctx);
