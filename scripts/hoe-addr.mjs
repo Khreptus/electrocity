@@ -41,7 +41,10 @@ async function probe() { // тимчасово: як влаштовано пош
     const i0 = h.search(/select-settlment/); console.log('NEW html:', h.slice(Math.max(0, i0 - 1500), i0 + 1500).replace(/\s+/g, ' '));
     const js = await (await fetch('https://hoe.com.ua' + (h.match(/src="(\/bundles\/js[^"]+)"/) || [])[1], { headers: { 'User-Agent': UA } })).text();
     const k = js.indexOf('Shutdown'); const k2 = js.indexOf('Shutdown =') >= 0 ? js.indexOf('Shutdown =') : js.indexOf('var Shutdown');
-    console.log('SHUTDOWN JS:', js.slice(Math.max(0, k2), k2 + 6000).replace(/\s+/g, ' '));
+    console.log('SHUTDOWN JS:', js.slice(k2 + 5800, k2 + 11000).replace(/\s+/g, ' '));
+    const g = async u => { const r = await fetch('https://hoe.com.ua' + u, { headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest' } }); return r.status + ' ' + (await r.text()).slice(0, 400).replace(/\s+/g, ' '); };
+    console.log('TRY settlements:', await g('/settlements?term=%D0%A5%D0%BC%D0%B5%D0%BB%D1%8C'));
+    console.log('TRY settlements2:', await g('/settlements/?q=%D0%A5%D0%BC%D0%B5%D0%BB%D1%8C'));
   } catch (e) { console.log('probe error', e.message); }
 }
 
