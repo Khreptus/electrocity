@@ -434,6 +434,8 @@ const hk = x => String(x || '').toLowerCase().replace(/[\s-]+/g, '').replace(/[�
 async function lookupQueue(a) {
   const r = region(a.regionId); if (!r || !a.street || !a.house) return null; const s = a.src || {};
   const ok = new Set(queueList(r.queues)); const one = qs => { const u = [...new Set((qs || []).map(x => String(x).trim()).filter(x => ok.has(x)))]; return u.length === 1 ? u[0] : null; };
+  if (r.op === 'hoe' && API_READY) { const x = await pq('queue', { op: 'hoe', city: a.city, street: a.street, house: a.house }).catch(() => null);
+    if (x?.queues?.length) return x.queues.includes(a.queue) ? a.queue : one(x.queues); }
   if (FILE_ADDR.has(r.op)) {
     let ids = s.hoeId ? [s.hoeId] : ((await hoeIndex(r.op))?.items || []).filter(([c]) => skel(c) === skel(a.city)).map(x => x[2]);
     for (const id of ids) { const hs = (await hoeCity(r.op, id))[a.street]; if (!hs) continue;
@@ -692,12 +694,18 @@ function initAddress() {
           .then(x => x.queue ? found(x.queue, r.opName) : notFound(x.multi ? 'За цією адресою кілька підключень (багатоквартирний будинок) — оператор не називає одну чергу. Оберіть свою вручну.' : 'Оператор не вказав чергу для цього будинку.'))
           .catch(() => notFound('Сайт оператора зараз не відповідає.')); }
       if (it.id) return lookup(it.id);
-      if (it.queues) { const qok = new Set(queueList(r.queues)); const qs = [...new Set(it.queues.map(x => String(x).trim()).filter(x => qok.has(x)))];
+      const useQueues = (list, by) => { const qok = new Set(queueList(r.queues)); const qs = [...new Set(list.map(x => String(x).trim()).filter(x => qok.has(x)))];
         if (!qs.length) return notFound('Оператор не вказав чергу для цього будинку.');
-        if (qs.length === 1) return found(qs[0], r.opName);
+        if (qs.length === 1) return found(qs[0], by || r.opName);
         draft.autoQueue = false; next.textContent = 'Обрати чергу вручну';
         res.innerHTML = `<div class="banner warn">${ic('alert')}<div><div class="bt">Будинок у кількох чергах</div><div class="bb">За даними ${esc(r.opName)} різні під’їзди чи лінії цього будинку мають різні черги. Свою чергу можна дізнатися в рахунку або особовому кабінеті. Оберіть її:</div></div></div><div class="qgrid c3">${qs.map(q => `<button class="qcell" data-mq="${q}">${q}</button>`).join('')}</div>`;
-        res.querySelectorAll('[data-mq]').forEach(b => b.onclick = () => found(b.dataset.mq, r.opName)); return; }
+        res.querySelectorAll('[data-mq]').forEach(b => b.onclick = () => found(b.dataset.mq, r.opName)); };
+      // Хмельницька: спершу свіжа черга з пошуку «Відключення за адресою» на сайті обленерго, файли черг (від 09.10) — запасний варіант
+      if (r.op === 'hoe' && API_READY) { res.innerHTML = `<div class="banner info">${ic('refresh')}<div class="bt">Перевіряємо чергу на сайті обленерго…</div></div>`;
+        return pq('queue', { op: 'hoe', city: draft.city, street: draft.street, house: it.label })
+          .then(x => x.queues?.length ? useQueues(x.queues, 'сайтом Хмельницькобленерго') : it.queues ? useQueues(it.queues, 'файлом черг Хмельницькобленерго') : notFound('Оператор не вказав чергу для цього будинку.'))
+          .catch(() => it.queues ? useQueues(it.queues, 'файлом черг Хмельницькобленерго') : notFound('Сайт оператора зараз не відповідає.')); }
+      if (it.queues) return useQueues(it.queues);
     }, { minChars: 0, emptyText: 'Такого номера немає в довіднику оператора' }); };
   attachTypeahead(st, streetSource(r, draft), it => { draft.street = it.label; draft.streetId = it.id || null; draft.house = ''; hs.value = ''; res.innerHTML = ''; draft.autoQueue = false; setupHouse(); hs.focus();
     if (dtekAuto(r)) import('./address.js').then(m => m.dtekHouses(r.op, draft.city, draft.street)).catch(() => notFound('Сервіс ДТЕК зараз не відповідає.'));

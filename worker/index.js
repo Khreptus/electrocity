@@ -5,7 +5,7 @@
 // • усе інше — статичні файли застосунку (ASSETS)
 import { parseDtek, parseHoe, parseMoe, SOURCES } from './sources.js';
 import { sendPush, vapidKeys } from './push.js';
-import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME, DTEK_RUNNER, dtekViaRunner, dtekQueue, dtekStore, PW, pwAddress, choeCities, choeGet, poeCities, poeStreets, poeHouses, poeInfo, poeQueue } from './outages.js';
+import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME, DTEK_RUNNER, dtekViaRunner, dtekQueue, dtekStore, PW, pwAddress, choeCities, choeGet, poeCities, poeStreets, poeHouses, poeInfo, poeQueue, hoeLive, hoeQueueFrom } from './outages.js';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 const json = (d, s = 200, h = {}) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, ...h } });
@@ -418,7 +418,14 @@ async function poeDir(kind, q, ctx) {
   throw new Error('невідомий запит');
 }
 
+// Хмельницькобленерго: черга будинку з пошуку «Відключення за адресою»
+async function hoeQueueApi(q, ctx) {
+  const live = await hoeLive({ city: q.get('city') || '', street: q.get('street') || '', house: q.get('house') || '' }, ctx);
+  return { found: !!live?.found, queues: live?.found ? hoeQueueFrom(live.rows) : [] };
+}
+
 async function pwDir(kind, q, ctx) {
+  if (q.get('op') === 'hoe' && kind === 'queue') return hoeQueueApi(q, ctx);
   if (q.get('op') === 'poe-poltava') return poeDir(kind, q, ctx);
   if (q.get('op') === 'zhoe') return ztDir(kind, q, ctx);
   if (q.get('op') === 'choe') return choeDir(kind, q, ctx);

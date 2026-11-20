@@ -34,20 +34,7 @@ export function parseSheet(rows) {
   return { rem, db };
 }
 
-async function probe() { // тимчасово: як влаштовано пошук черги hoe.com.ua/shutdown/new
-  try {
-    const g = async (u, o) => { const r = await fetch('https://hoe.com.ua' + u, { headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', ...(o ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) }, ...(o ? { method: 'POST', body: new URLSearchParams(o) } : {}) }); return [r.status, await r.text()]; };
-    const st = await g('/streets/26499?term=%D0%A1%D0%BE%D0%B1%D0%BE%D1%80'); console.log('TRY streets:', st[0], st[1].slice(0, 400));
-    const sid = (JSON.parse(st[1])[0] || {}).id;
-    const hs = await g('/houses/' + sid); console.log('TRY houses:', hs[0], hs[1].slice(0, 300));
-    const hl = JSON.parse(hs[1]); for (const h0 of [hl[hl.length - 1], hl[5]]) {
-    const ev = await g('/shutdown-events', { streetId: sid, house: h0 }); console.log('TRY events', h0, ':', ev[0], ev[1].replace(/\s+/g, ' ').slice(0, 1500)); }
-    const all = await g('/streets/26499?term='); console.log('TRY streets-all:', all[0], all[1].slice(0, 300)); const ss = await g('/settlements?term=%D0%BC.'); console.log('TRY settl-m:', ss[0], ss[1].slice(0, 300));
-  } catch (e) { console.log('probe error', e.message); }
-}
-
 async function main() {
-  await probe();
   const html = await (await fetch(PAGE, { headers: { 'User-Agent': UA } })).text();
   const links = [...new Set([...html.matchAll(/href="([^"]+\/xls\/[^"]+\.xlsx)"/gi)].map(m => new URL(m[1].replace(/&amp;/g, '&'), PAGE).href))]
     .filter(u => !/непобут|%D0%BD%D0%B5%D0%BF%D0%BE%D0%B1%D1%83%D1%82/i.test(u));
@@ -59,8 +46,6 @@ async function main() {
     const buf = Buffer.from(await (await fetch(u, { headers: { 'User-Agent': UA } })).arrayBuffer());
     const wb = XLSX.read(buf);
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-    // для перевірки формату: заголовок і перші рядки файлу в журналі запуску
-    if (n === 0) console.log('ФОРМАТ:', JSON.stringify(rows.slice(0, 8)));
     const { rem, db } = parseSheet(rows);
     for (const [city, streets] of Object.entries(db)) {
       const id = (++n).toString(36);

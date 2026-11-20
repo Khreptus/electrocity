@@ -140,3 +140,11 @@ test('Полтава: черга й відключення будинку', () =
   assert.deepEqual(poeItems(info).map(i => [i.kind, i.reason, i.start]), [['planned', 'Графік погодинних відключень', '2026-11-17T23:30']]);
   assert.deepEqual(poeItems({ message_type: 0, fn_accident_message: 'декілька підключень', gp_qnum_1: '', gp_qnum_2: '' }), []);
 });
+
+import { hoeEventRows, hoeQueueFrom } from '../worker/outages.js';
+test('Хмельницький: черга будинку з подій «Відключення за адресою»', () => {
+  const html = '<table><tbody><tr> <td>Графік погодинних відключень</td> <td>Аварійне</td> <td class="text-center">6.1, 6.1</td> <td class="text-center">0, 3</td> <td class="text-right">20.11.2026 15:00</td> <td class="text-right">20.11.2026 17:14</td> </tr><tr> <td>Графік погодинних відключень</td> <td>Аварійне</td> <td class="text-center">6.2</td> <td class="text-center">-</td> <td class="text-right">20.11.2026 09:34</td> <td class="text-right">20.11.2026 11:30</td> </tr><tr> <td>Графік погодинних відключень</td> <td>Аварійне</td> <td class="text-center">6.1</td> <td class="text-center">3</td> <td class="text-right">20.11.2026 09:20</td> <td class="text-right">20.11.2026 11:20</td> </tr></tbody></table>';
+  const rows = hoeEventRows(html);
+  assert.equal(rows.length, 3); assert.equal(rows[0].start, '2026-11-20T15:00');
+  assert.deepEqual(hoeQueueFrom(rows), ['6.1', '6.2']);
+});

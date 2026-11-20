@@ -403,9 +403,51 @@ export async function poeAddress({ city, street, house, cid }, nowIso, ctx) {
   return { found: false, at: new Date().toISOString(), items: [] };
 }
 
+
+// ---------- Хмельницькобленерго: «Відключення за адресою» (hoe.com.ua/shutdown/new) ----------
+// Відкритий пошук без капчі: GET /settlements?term= → [{id, text}], GET /streets/<id>?term= → [{id, text}], GET /houses/<streetId> → ["1", …],
+// POST /shutdown-events {streetId, house} → таблиця «Вид робіт | Тип | Черга (ГПВ) | Черга (ГАВ) | Початок | Кінець».
+// Черга будинку видно в рядках ГПВ — це свіжіше за файли черг (вони від 09.10.2026).
+const HOE = 'https://hoe.com.ua';
+const hoeGet = (path, form) => fetch(HOE + path, { method: form ? 'POST' : 'GET', headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) }, ...(form ? { body: new URLSearchParams(form) } : {}) })
+  .then(r => { if (!r.ok) throw new Error(`Хмельницькобленерго: HTTP ${r.status}`); return form ? r.text() : r.json(); });
+const hoeT = s => { const m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{1,2}):(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2, '0')}:${m[5]}` : null; };
+export function hoeEventRows(html) {
+  return [...String(html || '').matchAll(/<tr>([\s\S]*?)<\/tr>/gi)].map(r => [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(c => c[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()))
+    .filter(c => c.length >= 6).map(([work, type, gpv, gav, start, end]) => ({ work, type, gpv: [...new Set(gpv.match(/\d\.\d/g) || [])], start: hoeT(start), end: hoeT(end) }));
+}
+// найчастіша черга ГПВ у подіях будинку (будинок може мати кілька приєднань — тоді кілька черг)
+export function hoeQueueFrom(rows) {
+  const n = {}; for (const r of rows) if (/погодинн/i.test(r.work)) for (const q of r.gpv) n[q] = (n[q] || 0) + 1;
+  return Object.keys(n).sort((a, b) => n[b] - n[a]);
+}
+export async function hoeLive({ city, street, house }, ctx) {
+  const pk = placeKey(city), sk = streetKey(street);
+  const key = `hoe/live/${pk}/${sk}/${houseKey(house)}/${Math.floor(Date.now() / 300e3)}`;
+  return pwCached(key, 300, ctx, async () => {
+    const term = pk.split(/[\s-]/).sort((a, b) => b.length - a.length)[0] || pk;
+    const set = (await hoeGet(`/settlements?term=${encodeURIComponent(term)}`)).find(x => placeKey(String(x.text).replace(/\(.*?\)/g, '')) === pk);
+    if (!set) return null;
+    const sw = sk.split(/[\s-]/).filter(w => w.length >= 3).sort((a, b) => b.length - a.length)[0] || sk;
+    const st = (await hoeGet(`/streets/${set.id}?term=${encodeURIComponent(sw)}`)).find(x => streetKey(String(x.text).trim()) === sk);
+    if (!st) return null;
+    const hs = await hoeGet(`/houses/${st.id}`); const h = (hs || []).find(x => houseKey(x) === houseKey(house));
+    if (!h) return { found: false };
+    return { found: true, rows: hoeEventRows(await hoeGet('/shutdown-events', { streetId: st.id, house: h })) };
+  });
+}
+
 export async function addressStatus(env, params, ctx, nowIso) {
   const op = params.get('op'), city = params.get('city') || '', street = params.get('street') || '', house = params.get('house') || '';
   if (op === 'hoe') {
+    // спершу пошук за адресою на сайті (точно по будинку), інакше — події за РЕМ
+    const live = await hoeLive({ city, street, house }, ctx).catch(() => null);
+    if (live?.found) {
+      const items = live.rows.filter(r => !r.end || !nowIso || r.end > nowIso).map(r => ({
+        kind: /погодинн/i.test(r.work) ? 'schedule' : /аварі/i.test(r.type) ? 'emergency' : 'planned',
+        reason: r.work, start: r.start, end: r.end, scope: 'house', source: 'Хмельницькобленерго', queue: r.gpv.join(', ') }));
+      return { ok: true, supported: true, found: true, checkedAt: new Date().toISOString(), items, queue: hoeQueueFrom(live.rows), source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/new' };
+    }
     const r = await hoeAddress(env, { city, street, house }, nowIso, ctx);
     return { ok: true, supported: true, checkedAt: r.at, items: r.items, source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/all' };
   }
