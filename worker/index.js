@@ -43,7 +43,7 @@ export default {
       if (p === '/api/internal/push-state') {
         if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
         const subs = await getSubs(env);
-        return json({ lastpush: await env.KV.get('lastpush', 'json'), lasttick: await (await caches.default.match(new Request('https://cache.electrocity/lasttick')))?.json().catch(() => null), count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), seen: (x.seen || []).length })) });
+        return json({ lastpush: await env.KV.get('lastpush', 'json'), lastpushAddr: await env.KV.get('lastpush-addr', 'json'), lasttick: await (await caches.default.match(new Request('https://cache.electrocity/lasttick')))?.json().catch(() => null), count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), seen: (x.seen || []).length })) });
       }
       if (p === '/api/internal/push-run') { // запустити розсилку зараз і показати, що надіслано
         if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
@@ -90,8 +90,10 @@ export default {
     return env.ASSETS.fetch(req);
   },
 
+  // Два планові запуски, щоб кожен вкладався в ліміт запитів Cloudflare (50 на запуск):
+  // */15 — збір графіків + сповіщення про графік (зміни, нагадування); 7-59/15 — аварії за адресою й пам'ять черг.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(tick(env));
+    ctx.waitUntil(event.cron === '7-59/15 * * * *' ? addrTick(env) : tick(env));
   },
 };
 
@@ -146,10 +148,6 @@ async function tick(env, manual = false) {
   const subs = await getSubs(env);
   const ids = Object.keys(subs);
   if (!ids.length) return status;
-  // Хмельницька: раз на годину дивимось події підписаних адрес — так запам'ятовуємо їхню свіжу чергу (видно лише в подіях)
-  if (!manual && now.min % 60 < 15) { const seenA = new Set(); for (const s of Object.values(subs)) for (const a of s.addrs || []) {
-    if (a.op !== 'hoe' || !a.street || !a.house) continue; const k = `${a.city}|${a.street}|${a.house}`; if (seenA.has(k) || seenA.size >= 10) continue; seenA.add(k);
-    await hoeLive({ city: a.city, street: a.street, house: a.house }, { waitUntil: () => {} }, env).catch(() => null); } }
   const outbox = []; let seenChanged = false;
   for (const id of ids) {
     const s = subs[id];
@@ -159,18 +157,7 @@ async function tick(env, manual = false) {
         outbox.push({ id, msg: { title: `${a.name} · ${c.title}`, body: c.body, tag: `${c.kind}-${a.op}-${a.queue}-${c.date}` } });
       const r = manual ? null : reminder(data[a.op], a, s.lead ?? 30, now, t);
       if (r) outbox.push({ id, msg: r });
-      // аварія / планові роботи саме за адресою
-      if (!manual && t.address !== false && a.street && a.house) {
-        const items = await addrItems(env, a, now).catch(() => []);
-        for (const it of items) {
-          if (it.kind === 'schedule') continue;
-          const key = `${a.op}|${a.city}|${a.street}|${a.house}|${it.kind}|${it.start}|${it.end}`;
-          s.seen ||= [];
-          if (s.seen.includes(key)) continue;
-          s.seen.push(key); s.seen = s.seen.slice(-40); seenChanged = true;
-          outbox.push({ id, msg: addrMsg(a, it) });
-        }
-      }
+      // аварії й планові роботи за адресою — окремий плановий запуск addrTick
     }
   }
   let dead = false; const sent = [];
@@ -185,6 +172,39 @@ async function tick(env, manual = false) {
   // відмітка «плановий запуск дійшов до кінця» (Cache API, не витрачає ліміт KV)
   if (!manual) await caches.default.put(new Request('https://cache.electrocity/lasttick'), new Response(JSON.stringify({ at: new Date().toISOString(), min: now.min, outbox: outbox.length }), { headers: { 'Cache-Control': 'max-age=86400' } })).catch(() => {});
   return status;
+}
+
+// ---------- аварії й планові роботи за адресою (окремий плановий запуск) ----------
+async function addrTick(env) {
+  const now = kyiv(); const subs = await getSubs(env); const ids = Object.keys(subs); if (!ids.length) return;
+  // одна перевірка на унікальну адресу, хоч би скільки підписок її мали
+  const uniq = new Map();
+  for (const id of ids) for (const a of subs[id].addrs || []) if (a.street && a.house && (subs[id].types || {}).address !== false) {
+    const k = `${a.op}|${a.city}|${a.street}|${a.house}`; if (!uniq.has(k)) uniq.set(k, a);
+  }
+  const items = new Map();
+  for (const [k, a] of [...uniq].slice(0, 12)) items.set(k, await addrItems(env, a, now).catch(() => []));
+  // Хмельницька: раз на годину запам'ятовуємо свіжу чергу підписаних адрес (видно лише в подіях на сайті)
+  if (now.min % 60 < 15) for (const a of [...uniq.values()].filter(a => a.op === 'hoe').slice(0, 6))
+    await hoeLive({ city: a.city, street: a.street, house: a.house }, { waitUntil: () => {} }, env).catch(() => null);
+  const outbox = []; let seenChanged = false;
+  for (const id of ids) { const s = subs[id];
+    for (const a of s.addrs || []) for (const it of items.get(`${a.op}|${a.city}|${a.street}|${a.house}`) || []) {
+      if (it.kind === 'schedule') continue;
+      const key = `${a.op}|${a.city}|${a.street}|${a.house}|${it.kind}|${it.start}|${it.end}`;
+      s.seen ||= []; if (s.seen.includes(key)) continue;
+      s.seen.push(key); s.seen = s.seen.slice(-40); seenChanged = true;
+      outbox.push({ id, msg: addrMsg(a, it) });
+    }
+  }
+  let dead = false; const sent = [];
+  for (const o of outbox) {
+    const r = await sendPush(env, subs[o.id].sub, localize(o.msg, subs[o.id].lang)).catch(e => ({ status: 0, err: String(e?.message || e) }));
+    sent.push({ title: o.msg.title, status: r.status, err: r.err });
+    if (r.status === 404 || r.status === 410) { delete subs[o.id]; dead = true; }
+  }
+  if (outbox.length) await env.KV.put('lastpush-addr', JSON.stringify({ at: new Date().toISOString(), sent })).catch(() => {});
+  if (dead || seenChanged) await env.KV.put('subs', JSON.stringify(subs));
 }
 
 const hhmm = iso => iso ? iso.slice(11, 16) : '…';
