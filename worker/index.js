@@ -43,7 +43,7 @@ export default {
       if (p === '/api/internal/push-state') {
         if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
         const subs = await getSubs(env);
-        return json({ count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), seen: (x.seen || []).length })) });
+        return json({ lastpush: await env.KV.get('lastpush', 'json'), lasttick: await (await caches.default.match(new Request('https://cache.electrocity/lasttick')))?.json().catch(() => null), count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), seen: (x.seen || []).length })) });
       }
       if (p === '/api/internal/push-run') { // запустити розсилку зараз і показати, що надіслано
         if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
@@ -182,6 +182,8 @@ async function tick(env, manual = false) {
   lastPush = { at: new Date().toISOString(), now: now.min, subs: ids.length, outbox: outbox.length, sent };
   if (outbox.length) await env.KV.put('lastpush', JSON.stringify(lastPush)).catch(() => {}); // останнє надсилання — для діагностики
   if (dead || seenChanged) await env.KV.put('subs', JSON.stringify(subs));
+  // відмітка «плановий запуск дійшов до кінця» (Cache API, не витрачає ліміт KV)
+  if (!manual) await caches.default.put(new Request('https://cache.electrocity/lasttick'), new Response(JSON.stringify({ at: new Date().toISOString(), min: now.min, outbox: outbox.length }), { headers: { 'Cache-Control': 'max-age=86400' } })).catch(() => {});
   return status;
 }
 
