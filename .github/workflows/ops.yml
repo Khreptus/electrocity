@@ -1,0 +1,25 @@
+name: Перевірка і розсилка
+# Запускається, коли змінюється ops/request.json (або вручну). Дії: check — повна перевірка сервера;
+# broadcast — одне повідомлення всім підписникам (той самий id двічі не надсилається).
+on:
+  push:
+    paths: ['ops/request.json']
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Виконати
+        env:
+          DTEK_KEY: ${{ secrets.DTEK_KEY }}
+        run: |
+          API=https://electrocity.slv463991.workers.dev
+          ACTION=$(jq -r .action ops/request.json)
+          if [ "$ACTION" = "broadcast" ]; then
+            OUT=$(curl -s -X POST "$API/api/internal/broadcast" -H "X-Key: $DTEK_KEY" -H 'Content-Type: application/json' --data @<(jq '.message' ops/request.json))
+          else
+            OUT=$(curl -s "$API/api/internal/check" -H "X-Key: $DTEK_KEY")
+          fi
+          echo "$OUT" | jq . || echo "$OUT"
+          { echo '```json'; echo "$OUT" | jq . 2>/dev/null || echo "$OUT"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

@@ -49,6 +49,37 @@ export default {
         const subs = await getSubs(env);
         return json({ lastpush: await env.KV.get('lastpush', 'json'), lastpushAddr: await env.KV.get('lastpush-addr', 'json'), lastpushAlert: await env.KV.get('lastpush-alert', 'json'), alertstate: await env.KV.get('alertstate', 'json'), lasttick: await (await caches.default.match(new Request('https://cache.electrocity/lasttick')))?.json().catch(() => null), count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), alert: x.alert ? `${x.alert.n}${x.alert.siren ? ' +сирена' : ''}` : null, seen: (x.seen || []).length })) });
       }
+      // повна перевірка застосунку (для GitHub Actions «Перевірка і розсилка»), лише з секретом
+      if (p === '/api/internal/check') {
+        if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
+        const subs = await getSubs(env); const st = JSON.parse(await env.KV.get('status') || '{}');
+        const cache = async k => (await caches.default.match(new Request('https://cache.electrocity/' + k)))?.json().catch(() => null);
+        const a = await getAlerts().catch(e => ({ error: String(e.message || e) })); const t = await getTargets().catch(e => ({ error: String(e.message || e) }));
+        return json({ at: new Date().toISOString(), vapid: !!(await vapidKeys(env)).publicB64,
+          schedules: Object.fromEntries(Object.entries(st).map(([k, v]) => [k, v.ok ? (v.empty ? 'ok (порожньо)' : 'ok') : 'ПОМИЛКА: ' + v.error])),
+          alerts: { ok: a.ok, stale: !!a.stale, at: a.at, raions: Object.keys(a.raions || {}).length, targets: (a.targets || []).length, sources: (a.sources || []).map(x => `${x.n}: ${x.ok ? 'ok' : x.d}`) },
+          targetsFast: { ok: t.ok, n: t.targets?.length ?? null },
+          cron: { schedules: await cache('lasttick'), alerts: await cache('lastalerttick') },
+          push: { subs: Object.keys(subs).length, hosts: Object.values(subs).reduce((m, x) => { const h = new URL(x.sub.endpoint).host; m[h] = (m[h] || 0) + 1; return m; }, {}), withAlert: Object.values(subs).filter(x => x.alert?.on).length,
+            lastpush: await env.KV.get('lastpush', 'json'), lastpushAddr: await env.KV.get('lastpush-addr', 'json'), lastpushAlert: await env.KV.get('lastpush-alert', 'json'), lastBroadcast: await env.KV.get('broadcast-last', 'json') } });
+      }
+      // розсилка одного повідомлення всім підписникам (захист від повторного надсилання того самого тексту)
+      if (p === '/api/internal/broadcast' && req.method === 'POST') {
+        if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
+        const { title, body, url: link, id, dry } = await req.json();
+        if (!body || !id) return json({ error: 'body and id required' }, 400);
+        const prev = await env.KV.get('broadcast-last', 'json');
+        if (prev?.id === id && !dry) return json({ skipped: 'already sent', prev });
+        const subs = await getSubs(env); const sent = []; let dead = false;
+        if (!dry) for (const [sid, s] of Object.entries(subs)) {
+          const r = await sendPush(env, s.sub, { title: String(title || 'Electrocity').slice(0, 80), body: String(body).slice(0, 300), tag: 'broadcast-' + id, url: link || './' }, 24 * 3600).catch(e => ({ status: 0, err: String(e?.message || e) }));
+          sent.push({ host: new URL(s.sub.endpoint).host, status: r.status }); if (r.status === 404 || r.status === 410) { delete subs[sid]; dead = true; }
+        }
+        if (dead) await env.KV.put('subs', JSON.stringify(subs));
+        const rec = { id, at: new Date().toISOString(), dry: !!dry, subs: Object.keys(subs).length, sent };
+        if (!dry) await env.KV.put('broadcast-last', JSON.stringify(rec));
+        return json(rec);
+      }
       if (p === '/api/internal/push-run') { // запустити розсилку зараз і показати, що надіслано
         if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
         await tick(env, false); return json({ lastPush, stored: await env.KV.get('lastpush', 'json') });

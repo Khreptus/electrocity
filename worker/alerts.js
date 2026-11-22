@@ -197,6 +197,12 @@ const mins = ms => { const m = Math.max(1, Math.round(ms / 60000)); return m < 6
 // Раз на хвилину: тривога / відбій / висока загроза для міста кожного підписника.
 // Стан міст — у KV, але пишемо лише коли щось змінилось (ліміт записів KV).
 export async function alertTick(env, getSubs, sendPush, localize) {
+  const r = await alertTickRun(env, getSubs, sendPush, localize).catch(e => ({ error: String(e?.message || e) }));
+  // відмітка «щохвилинна перевірка тривог працює» (Cache API, без витрати ліміту KV)
+  await caches.default.put(new Request('https://cache.electrocity/lastalerttick'), new Response(JSON.stringify({ at: new Date().toISOString(), ...r }), { headers: { 'Cache-Control': 'max-age=86400' } })).catch(() => {});
+  return r;
+}
+async function alertTickRun(env, getSubs, sendPush, localize) {
   const subs = await getSubs(env); const ids = Object.keys(subs).filter(id => subs[id].alert?.on);
   if (!ids.length) return { subs: 0 };
   const snap = await getAlerts(true);
