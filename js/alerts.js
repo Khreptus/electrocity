@@ -194,22 +194,24 @@ const COMPASS = ['Пн', 'ПнСх', 'Сх', 'ПдСх', 'Пд', 'ПдЗх', 'З
 const compass = b => COMPASS[Math.round(((b % 360) + 360) % 360 / 45) % 8];
 
 function layers() {
+  // пороги від початкового масштабу (як у віджеті: ×1.4–×3 — проступають вулиці, ×2.5–×4 — конуси курсу)
+  const H = homeZoom, Z1 = H + 0.5, Z2 = H + 1.6, C1 = H + 1.3, C2 = H + 2;
   const m = M; const firstSym = m.getStyle().layers.find(l => l.type === 'symbol')?.id;
   for (const l of m.getStyle().layers) if (l.type === 'symbol' && l.layout && l.layout['text-field'] !== undefined) m.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:uk'], ['get', 'name'], ['get', 'name_en']]);
   m.addSource('ua', { type: 'geojson', data: GEOJ });
   const lv = ['coalesce', ['feature-state', 'lv'], 0];
   const fillCol = ['match', lv, 3, COL.alert, 2, COL.threat, COL.idle];
   // Наближення: райони стають прозорими, крізь них видно вулиці (як у віджеті)
-  const fillOp = ['interpolate', ['linear'], ['zoom'], 5.8, 1, 7.6, ['case', ['>', lv, 0], 0.42, 0]];
+  const fillOp = ['interpolate', ['linear'], ['zoom'], Z1, 1, Z2, ['case', ['>', lv, 0], 0.42, 0]];
   m.addLayer({ id: 'ua-fill', type: 'fill', source: 'ua', filter: ['==', ['get', 't'], 'r'], paint: { 'fill-color': fillCol, 'fill-opacity': fillOp } }, firstSym);
   m.addLayer({ id: 'ua-fill-o', type: 'fill', source: 'ua', filter: ['==', ['get', 't'], 'o'], layout: { visibility: 'none' }, paint: { 'fill-color': fillCol, 'fill-opacity': fillOp } }, firstSym);
   m.addLayer({ id: 'ua-city', type: 'fill', source: 'ua', filter: ['==', ['get', 't'], 'c'], paint: { 'fill-color': fillCol, 'fill-opacity': fillOp } }, firstSym);
-  m.addLayer({ id: 'ua-line', type: 'line', source: 'ua', filter: ['in', ['get', 't'], ['literal', ['r', 'c']]], paint: { 'line-color': COL.border, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.5, 9, 1.4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 5.8, 1, 7.6, 0.4] } }, firstSym);
-  m.addLayer({ id: 'ua-obl', type: 'line', source: 'ua', filter: ['==', ['get', 't'], 'o'], paint: { 'line-color': COL.oblast, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.1, 9, 2.6], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 5.8, 1, 7.6, 0.65] } });
+  m.addLayer({ id: 'ua-line', type: 'line', source: 'ua', filter: ['in', ['get', 't'], ['literal', ['r', 'c']]], paint: { 'line-color': COL.border, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.5, 9, 1.4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], Z1, 1, Z2, 0.4] } }, firstSym);
+  m.addLayer({ id: 'ua-obl', type: 'line', source: 'ua', filter: ['==', ['get', 't'], 'o'], paint: { 'line-color': COL.oblast, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.1, 9, 2.6], 'line-opacity': ['interpolate', ['linear'], ['zoom'], Z1, 1, Z2, 0.65] } });
   m.addSource('kyiv', { type: 'geojson', data: { type: 'Feature', properties: { col: COL.idle }, geometry: { type: 'Point', coordinates: [30.52, 50.45] } } });
-  m.addLayer({ id: 'kyiv', type: 'circle', source: 'kyiv', maxzoom: 7.2, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4.5, 3, 7, 6], 'circle-color': ['get', 'col'], 'circle-stroke-color': COL.oblast, 'circle-stroke-width': 1 } });
+  m.addLayer({ id: 'kyiv', type: 'circle', source: 'kyiv', maxzoom: Z2, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4.5, 3, 7, 6], 'circle-color': ['get', 'col'], 'circle-stroke-color': COL.oblast, 'circle-stroke-width': 1 } });
   // Конуси курсу й час підльоту: з'являються при наближенні; у вибраної цілі — завжди
-  const coneOp = base => ['interpolate', ['linear'], ['zoom'], 6.6, ['case', ['==', ['get', 'sel'], 1], base, 0], 7.4, base];
+  const coneOp = base => ['interpolate', ['linear'], ['zoom'], C1, ['case', ['==', ['get', 'sel'], 1], base, 0], C2, base];
   m.addSource('cone', { type: 'geojson', data: EMPTY });
   m.addLayer({ id: 'cone-fill', type: 'fill', source: 'cone', filter: ['==', ['get', 'p'], 'poly'], paint: { 'fill-color': ['get', 'col'], 'fill-opacity': coneOp(0.18) } });
   m.addLayer({ id: 'cone-edge', type: 'line', source: 'cone', filter: ['==', ['get', 'p'], 'edge'], paint: { 'line-color': ['get', 'col'], 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': coneOp(0.8) } });
@@ -223,7 +225,7 @@ function layers() {
   m.addSource('tg', { type: 'geojson', data: EMPTY });
   m.addLayer({ id: 'tg-ic', type: 'symbol', source: 'tg', layout: { 'icon-image': ['concat', 'tg-', ['get', 'k']], 'icon-rotate': ['get', 'b'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-size': ['interpolate', ['linear'], ['zoom'], 4.5, 0.62, 7, 0.85, 10, 1.15] } });
   m.addLayer({ id: 'tg-cnt', type: 'symbol', source: 'tg', filter: ['>', ['get', 'c'], 1], layout: { 'text-field': ['to-string', ['get', 'c']], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-offset': [0.9, -0.9], 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 2.2 } });
-  m.addLayer({ id: 'tg-lab', type: 'symbol', source: 'tg', minzoom: 6.9, layout: { 'text-field': ['get', 'lab'], 'text-font': ['Noto Sans Bold'], 'text-size': 9.5, 'text-offset': [0, 1.5] }, paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,.8)', 'text-halo-width': 1.6 } });
+  m.addLayer({ id: 'tg-lab', type: 'symbol', source: 'tg', minzoom: C1, layout: { 'text-field': ['get', 'lab'], 'text-font': ['Noto Sans Bold'], 'text-size': 9.5, 'text-offset': [0, 1.5] }, paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,.8)', 'text-halo-width': 1.6 } });
   m.addLayer({ id: 'tg-sel', type: 'circle', source: 'tg', filter: ['==', ['get', 'sel'], 1], paint: { 'circle-radius': 14, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5 } });
   // Моє місто
   m.addSource('pin', { type: 'geojson', data: EMPTY });
@@ -236,7 +238,7 @@ function layers() {
   ready = true; applySnap(); frame(); zoomHint();
 }
 function resetBtn() { const b = mapEl?.querySelector('.mreset'); if (b && M) b.hidden = M.getZoom() < homeZoom + 0.35; }
-function zoomHint() { const h = mapEl?.querySelector('.mhint'); if (h && M) h.hidden = M.getZoom() >= 6.6 || !TG.length; }
+function zoomHint() { const h = mapEl?.querySelector('.mhint'); if (h && M) h.hidden = M.getZoom() >= homeZoom + 1.3 || !TG.length; }
 
 // Стан районів → feature-state (без перезавантаження геометрії)
 function applySnap() {
@@ -268,7 +270,7 @@ function frame() {
   M.getSource('tg').setData({ type: 'FeatureCollection', features: ts.map(t => ({ type: 'Feature', properties: { id: t.id, k: KIND[t.k] ? t.k : 'unknown', b: t.k === 'fpv' || t.k === 'unknown' ? 0 : Math.round(t.b || 0), c: t.c || 1, lab: t.m || KIND[t.k] || 'Ціль', sel: t.id === selected ? 1 : 0 }, geometry: { type: 'Point', coordinates: [t.lo, t.la] } })) });
   const feats = [];
   for (const t of ts) {
-    if (t.b == null || (z < 6.5 && t.id !== selected)) continue;
+    if (t.b == null || (z < homeZoom + 1.2 && t.id !== selected)) continue;
     const v = speedOf(t), minutes = v > 1500 ? Math.min(10, 250 / v * 60) : 10, c = cone(t, minutes); if (!c) continue;
     const col = coneCol(v), sel = t.id === selected ? 1 : 0, start = [t.lo, t.la], P = q => [q.lon, q.lat];
     const tip = c.C.at(-1), le = c.L.at(-1), re = c.R.at(-1);
@@ -321,7 +323,7 @@ export async function mountMap(S) {
       M = new maplibregl.Map({ container: mapEl.querySelector('.amapc'), style: 'https://tiles.openfreemap.org/styles/dark', bounds: UA_BOUNDS, fitBoundsOptions: { padding: 6 },
         minZoom: 4, maxZoom: 15, maxBounds: [[16, 41], [46, 55]], dragRotate: false, pitchWithRotate: false, touchPitch: false, renderWorldCopies: false, fadeDuration: 0,
         attributionControl: { compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>' } });
-      M.touchZoomRotate.disableRotation(); M.keyboard?.disableRotation?.();
+      M.touchZoomRotate.disableRotation(); M.scrollZoom.setWheelZoomRate(1 / 220); M.keyboard?.disableRotation?.();
       M.on('load', () => { homeZoom = M.getZoom(); try { layers(); } catch (e) { console.warn('map layers', e); } });
       M.on('error', e => console.warn('map', e?.error?.message || e));
       mapEl.querySelector('.mreset').onclick = () => M.fitBounds(UA_BOUNDS, { padding: 6, duration: 500 });

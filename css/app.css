@@ -359,7 +359,7 @@ html{touch-action:pan-x pan-y}
 .merr{display:grid;place-items:center;height:100%;color:var(--stage-text-2);font-size:14px;padding:20px;text-align:center}
 .mreset{position:absolute;right:10px;top:10px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;border:1px solid rgba(255,255,255,.18)}
 .mreset svg.i{width:18px;height:18px}
-.mhint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#ddd;font-size:11px;font-weight:500;padding:5px 10px;border-radius:99px;white-space:nowrap;pointer-events:none}
+.mhint{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#ddd;font-size:11px;font-weight:500;padding:5px 10px;border-radius:99px;white-space:nowrap;pointer-events:none}
 .tcard{position:absolute;left:10px;top:10px;width:236px;max-width:calc(100% - 64px);background:rgba(28,28,31,.96);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;color:#fff;box-shadow:0 6px 14px rgba(0,0,0,.4);font-size:11.5px;display:flex;flex-direction:column;gap:5px;z-index:2}
 .tcard .th{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:2px}
 .tcard .ti{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex:none}
