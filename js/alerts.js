@@ -197,7 +197,12 @@ function layers() {
   // пороги від початкового масштабу (як у віджеті: ×1.4–×3 — проступають вулиці, ×2.5–×4 — конуси курсу)
   const H = homeZoom, Z1 = H + 0.5, Z2 = H + 1.6, C1 = H + 1.3, C2 = H + 2;
   const m = M; const firstSym = m.getStyle().layers.find(l => l.type === 'symbol')?.id;
-  for (const l of m.getStyle().layers) if (l.type === 'symbol' && l.layout && l.layout['text-field'] !== undefined) m.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:uk'], ['get', 'name'], ['get', 'name_en']]);
+  // підписи підложки — українською і лише при наближенні (на загальному плані карта чиста, як у віджеті)
+  const fadeIn = ['interpolate', ['linear'], ['zoom'], Z1, 0, Z2, 1];
+  for (const l of m.getStyle().layers) if (l.type === 'symbol') {
+    if (l.layout && l.layout['text-field'] !== undefined) m.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:uk'], ['get', 'name'], ['get', 'name_en']]);
+    try { m.setPaintProperty(l.id, 'text-opacity', fadeIn); m.setPaintProperty(l.id, 'icon-opacity', fadeIn); } catch {}
+  }
   m.addSource('ua', { type: 'geojson', data: GEOJ });
   const lv = ['coalesce', ['feature-state', 'lv'], 0];
   const fillCol = ['match', lv, 3, COL.alert, 2, COL.threat, COL.idle];
