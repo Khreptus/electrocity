@@ -5,6 +5,7 @@
 // • усе інше — статичні файли застосунку (ASSETS)
 import { parseDtek, parseHoe, parseMoe, SOURCES } from './sources.js';
 import { sendPush, vapidKeys } from './push.js';
+import { getAlerts, alertTick } from './alerts.js';
 import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME, DTEK_RUNNER, dtekViaRunner, dtekQueue, dtekStore, PW, pwAddress, choeCities, choeGet, poeCities, poeStreets, poeHouses, poeInfo, poeQueue, hoeLive, hoeQueueFrom } from './outages.js';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
@@ -36,6 +37,8 @@ export default {
         const d = await env.KV.get('sched:' + op);
         return d ? new Response(d, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=30', ...CORS } }) : json({ error: 'not found' }, 404);
       }
+      // повітряні тривоги: один спільний знімок (кеш 20 с) для всіх — джерела не смикаються з кожного телефона
+      if (p === '/api/alerts') { const a = await getAlerts(); return json(a, 200, { 'Cache-Control': 'public, max-age=15' }); }
       if (p === '/api/vapid') return json({ key: (await vapidKeys(env)).publicB64 });
       if (p === '/api/push/subscribe' && req.method === 'POST') return json(await subscribe(env, await req.json()));
       if (p === '/api/push/unsubscribe' && req.method === 'POST') return json(await unsubscribe(env, (await req.json()).endpoint));
@@ -43,7 +46,7 @@ export default {
       if (p === '/api/internal/push-state') {
         if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
         const subs = await getSubs(env);
-        return json({ lastpush: await env.KV.get('lastpush', 'json'), lastpushAddr: await env.KV.get('lastpush-addr', 'json'), lasttick: await (await caches.default.match(new Request('https://cache.electrocity/lasttick')))?.json().catch(() => null), count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), seen: (x.seen || []).length })) });
+        return json({ lastpush: await env.KV.get('lastpush', 'json'), lastpushAddr: await env.KV.get('lastpush-addr', 'json'), lastpushAlert: await env.KV.get('lastpush-alert', 'json'), alertstate: await env.KV.get('alertstate', 'json'), lasttick: await (await caches.default.match(new Request('https://cache.electrocity/lasttick')))?.json().catch(() => null), count: Object.keys(subs).length, subs: Object.values(subs).map(x => ({ host: new URL(x.sub.endpoint).host, lead: x.lead, types: x.types, addrs: (x.addrs || []).map(a => `${a.op} ${a.queue} ${a.name}`), alert: x.alert ? `${x.alert.n}${x.alert.siren ? ' +сирена' : ''}` : null, seen: (x.seen || []).length })) });
       }
       if (p === '/api/internal/push-run') { // запустити розсилку зараз і показати, що надіслано
         if (!env.DTEK_KEY || req.headers.get('X-Key') !== env.DTEK_KEY) return json({ error: 'forbidden' }, 403);
@@ -93,6 +96,8 @@ export default {
   // Два планові запуски, щоб кожен вкладався в ліміт запитів Cloudflare (50 на запуск):
   // */15 — збір графіків + сповіщення про графік (зміни, нагадування); 7-59/15 — аварії за адресою й пам'ять черг.
   async scheduled(event, env, ctx) {
+    // * * * * * — тривоги: сповіщення «тривога / відбій / висока загроза» для міста підписника
+    if (event.cron === '* * * * *') return ctx.waitUntil(alertTick(env, getSubs, sendPush, localize));
     ctx.waitUntil(event.cron === '7-59/15 * * * *' ? addrTick(env) : tick(env));
   },
 };
@@ -299,16 +304,22 @@ async function idOf(endpoint) {
 }
 async function getSubs(env) { return JSON.parse(await env.KV.get('subs') || '{}'); }
 async function subscribe(env, body) {
-  const { subscription, addrs, lead, types, lang } = body || {};
+  const { subscription, addrs, lead, types, lang, alert } = body || {};
   if (!subscription?.endpoint || !subscription?.keys?.p256dh) throw new Error('bad subscription');
   const clean = (addrs || []).slice(0, 10).map(a => ({ op: String(a.op).slice(0, 20), queue: String(a.queue).slice(0, 8), name: String(a.name || 'Адреса').slice(0, 20), city: String(a.city || '').slice(0, 60), street: String(a.street || '').slice(0, 80), house: String(a.house || '').slice(0, 12) }));
   const subs = await getSubs(env);
   const id = await idOf(subscription.endpoint);
-  const next = { sub: { endpoint: subscription.endpoint, keys: subscription.keys }, addrs: clean, seen: subs[id]?.seen || [], lead: [15, 30, 60].includes(+lead) ? +lead : 30, types: types || {}, lang: ['en', 'de'].includes(lang) ? lang : 'uk' };
+  const next = { sub: { endpoint: subscription.endpoint, keys: subscription.keys }, addrs: clean, seen: subs[id]?.seen || [], lead: [15, 30, 60].includes(+lead) ? +lead : 30, types: types || {}, lang: ['en', 'de'].includes(lang) ? lang : 'uk', ...(cleanAlert(alert) ? { alert: cleanAlert(alert) } : {}) };
   if (JSON.stringify(subs[id]) === JSON.stringify(next)) return { ok: true, id, unchanged: true };
   subs[id] = next;
   await env.KV.put('subs', JSON.stringify(subs));
   return { ok: true, id };
+}
+// місто для сповіщень про тривогу: назва, ключ міста, район, область, координати
+function cleanAlert(a) {
+  if (!a || !a.on || typeof a.la !== 'number' || typeof a.lo !== 'number') return null;
+  const t = (x, n) => String(x || '').slice(0, n);
+  return { on: true, siren: !!a.siren, n: t(a.n, 40), k: t(a.k, 60), r: t(a.r, 60), o: t(a.o, 60), la: +a.la.toFixed(4), lo: +a.lo.toFixed(4) };
 }
 async function unsubscribe(env, endpoint) {
   const subs = await getSubs(env); const id = await idOf(endpoint || '');

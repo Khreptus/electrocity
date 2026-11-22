@@ -2,18 +2,20 @@ import { setLang, LANGS, detectLang, locale, tr } from './i18n.js';
 import { ic, STATE_ICON } from './icons.js';
 import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, FILE_ADDR, skel, isYasno, yasnoGroup, isPw, hoeIndex, hoeCity, pq } from './address.js';
 import { API, API_READY } from './config.js';
+import { alertsView, alertSettingsView, fetchAlerts, lastSnap, citySheetHTML, fillCityList, cityFromHromada, cityKey, guessCity, cityStatus, hms, playSiren } from './alerts.js';
 import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr, freeDay } from './data.js';
 
 // ---------- Стан ----------
 const KEY = 'svitlo.v1';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
 let S = Object.assign({ addresses: [], primaryId: null, currentId: null, theme: 'system', notify: { before: 30, enabled: false } }, load());
+S.alerts = Object.assign({ city: null, push: false, siren: true, targets: true, threat: true, mode: 'raions' }, S.alerts);
 S.lang ||= detectLang(); setLang(S.lang);
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const cur = () => S.addresses.find(a => a.id === S.currentId) || S.addresses.find(a => a.id === S.primaryId) || S.addresses[0];
 
-let view = S.addresses.length ? 'home' : 'welcome';
+let view = location.hash === '#alerts' ? 'alerts' : S.addresses.length ? 'home' : 'welcome';
 let day = 0;               // 0 сьогодні, 1 завтра
 let draft = null;          // чернетка адреси в онбордингу / додаванні
 let editId = null;
@@ -38,7 +40,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme
 const $app = document.getElementById('app');
 async function render() {
   applyTheme();
-  const tabs = ['home', 'addresses', 'settings'].includes(view);
+  const tabs = ['home', 'addresses', 'alerts', 'settings'].includes(view);
   let html = '';
   if (view === 'welcome') html = welcome();
   else if (view.startsWith('ob-')) html = onboarding();
@@ -47,13 +49,16 @@ async function render() {
   else if (view === 'addresses') html = await addresses();
   else if (view === 'edit') html = edit();
   else if (view === 'settings') html = settings();
-  const side = tabs || view === 'detail' ? await sidebar() : '';
+  else if (view === 'alerts') html = await alertsTab();
+  else if (view === 'alert-settings') html = alertSettingsView(S);
+  const side = tabs || view === 'detail' || view === 'alert-settings' ? await sidebar() : '';
   $app.innerHTML = side + `<div class="desk-wrap"><main class="view ${tabs ? '' : 'no-tabs'}">${html}</main></div>` + (tabs ? tabbar() : '');
   if (view === 'ob-city') initCity();
   if (view === 'ob-address') initAddress();
   if ((view === 'home' || view === 'detail') && cur()) addrStatus(cur());
   if (['home', 'detail', 'addresses'].includes(view) || matchMedia('(min-width:1024px)').matches) refreshAddrs();
-  document.title = view === 'home' && cur() ? `${cur().name} · Electrocity` : 'Electrocity — графік відключень';
+  if (view === 'alerts' && !lastSnap() && Date.now() - alertTry > 10000) { alertTry = Date.now(); fetchAlerts().then(x => x && view === 'alerts' && render()); }
+  document.title = view === 'alerts' ? 'Тривоги · Electrocity' : view === 'home' && cur() ? `${cur().name} · Electrocity` : 'Electrocity — графік відключень';
 }
 
 // ---------- Стан за конкретною адресою: аварійні й планові відключення ----------
@@ -152,13 +157,13 @@ async function addrStatus(a) {
 
 function tabbar() {
   const t = (v, i, l) => `<button data-go="${v}" ${view === v ? 'aria-current="page"' : ''}>${ic(i)}${l}</button>`;
-  return `<nav class="tabs">${t('home', 'zap', 'Світло')}${t('addresses', 'map-pin', 'Адреси')}${t('settings', 'settings', 'Налаштування')}</nav>`;
+  return `<nav class="tabs">${t('home', 'zap', 'Світло')}${t('addresses', 'map-pin', 'Адреси')}${t('alerts', 'siren', 'Тривоги')}${t('settings', 'settings', 'Налаштування')}</nav>`;
 }
 async function sidebar() {
   const cards = await Promise.all(S.addresses.map(a => addrCard(a, true)));
   const n = (v, i, l) => `<button data-go="${v}" ${view === v ? 'aria-current="page"' : ''}>${ic(i)}${l}</button>`;
   return `<aside class="side"><div class="brand"><img src="icons/icon-192.png" alt="" width="36" height="36" style="border-radius:10px">Electrocity</div>
-  <nav>${n('home', 'zap', 'Графік')}${n('addresses', 'map-pin', 'Мої адреси')}${n('settings', 'settings', 'Налаштування')}</nav>
+  <nav>${n('home', 'zap', 'Графік')}${n('addresses', 'map-pin', 'Мої адреси')}${n('alerts', 'siren', 'Тривоги')}${n('settings', 'settings', 'Налаштування')}</nav>
   ${S.addresses.length ? '<div class="over" style="color:var(--stage-text-3)">Мої адреси</div>' : ''}${cards.join('')}</aside>`;
 }
 
@@ -312,6 +317,24 @@ function edit() {
    </div>
    <button class="btn danger" data-act="delete">${ic('trash')} Видалити адресу</button></section>`;
 }
+
+// ----- Тривоги -----
+// Моє місто за замовчуванням — місто основної адреси (можна змінити в налаштуваннях карти)
+async function alertsTab() {
+  if (!S.alerts.city && !S.alerts.cityTried) { S.alerts.cityTried = true; const a = S.addresses.find(x => x.id === S.primaryId) || S.addresses[0];
+    if (a) { const r = region(a.regionId); S.alerts.city = await guessCity(a.city || r.center, r.id === 'kyiv-city' ? 'м. Київ' : r.name).catch(() => null); }
+    save(); }
+  return alertsView(S);
+}
+let sirenWas = false, alertTry = 0;
+function checkSiren() { // сирена в застосунку — коли загроза для мого міста щойно стала високою
+  const s = lastSnap(); if (!s || !S.alerts.city) return;
+  const high = cityStatus(s, S.alerts.city).high && cityStatus(s, S.alerts.city).on;
+  if (high && !sirenWas && S.alerts.siren !== false && !document.hidden) { playSiren(); toast('Висока загроза для вашого міста'); }
+  sirenWas = high;
+}
+function alertPayload() { const c = S.alerts.city; if (!S.alerts.push || !c) return null;
+  return { on: true, siren: S.alerts.siren !== false, n: c.label, k: cityKey(c), r: c.raion, o: c.oblast, la: c.lat, lo: c.lon }; }
 
 // ----- Налаштування -----
 function settings() {
@@ -531,7 +554,7 @@ async function pushSub(create) {
 async function syncPush() {
   if (!S.notify.enabled || !API_READY) return;
   try { const sub = await pushSub(false); if (!sub) return;
-    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, lang: S.lang, addrs: S.addresses.filter(a => a.notify !== false).map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name, city: a.city, street: a.street, house: a.house })) }) });
+    await fetch(`${API}api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), lead: S.notify.lead, types: S.notify.types, lang: S.lang, alert: alertPayload(), addrs: S.addresses.filter(a => a.notify !== false).map(a => ({ op: region(a.regionId).op, queue: a.queue, name: a.name, city: a.city, street: a.street, house: a.house })) }) });
   } catch {}
 }
 
@@ -593,6 +616,16 @@ document.addEventListener('click', async e => {
     case 'nlead': S.notify.lead = +t.dataset.v; save(); syncPush(); notifSheet(); break;
     case 'ntype': S.notify.types[t.dataset.k] = S.notify.types[t.dataset.k] === false; save(); syncPush(); notifSheet(); break;
     case 'ntest': { const sub = await pushSub(false); if (!sub) break; const r = await fetch(`${API}api/push/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).then(r => r.json()).catch(() => ({})); toast(r.ok ? 'Надіслано — перевірте сповіщення' : 'Не вдалося надіслати'); break; }
+    case 'acity': openSheet(citySheetHTML() + `<button class="btn ghost" data-act="close">Закрити</button>`); await fillCityList(''); { const q = document.getElementById('acityq'); q.addEventListener('input', () => fillCityList(q.value)); } break;
+    case 'acitypick': { const h = document.getElementById('acitylist')._res?.[+t.dataset.i]; if (!h) break; S.alerts.city = cityFromHromada(h); save(); syncPush(); closeSheet(); render(); toast(`Місто: ${S.alerts.city.label}`); break; }
+    case 'apush': if (!S.alerts.push || !S.notify.enabled) { // увімкнути: потрібен дозвіл на сповіщення
+        try { if (!S.notify.enabled) { const p = await Notification.requestPermission(); if (p !== 'granted') { notifSheet(); break; } await pushSub(true); S.notify.enabled = true; }
+          S.alerts.push = true; save(); await syncPush(); toast('Сповіщення про тривогу увімкнено'); } catch (err) { notifSheet(); break; } }
+      else { S.alerts.push = false; save(); syncPush(); toast('Сповіщення про тривогу вимкнено'); } render(); break;
+    case 'asiren': S.alerts.siren = S.alerts.siren === false; save(); syncPush(); if (S.alerts.siren) playSiren(); render(); break;
+    case 'atargets': S.alerts.targets = S.alerts.targets === false; save(); render(); break;
+    case 'athreat': S.alerts.threat = S.alerts.threat === false; save(); render(); break;
+    case 'amode': S.alerts.mode = t.dataset.v; save(); render(); break;
     case 'askperm': if (Notification.permission !== 'granted') { const p = await Notification.requestPermission(); S.notify.enabled = p === 'granted'; save(); } closeSheet(); render(); break;
   }
 });
@@ -606,11 +639,14 @@ addEventListener('online', render); addEventListener('offline', render);
 
 // Оновлення таймера й індикатора «зараз» щохвилини (раз на 20 с для точності)
 setInterval(() => { if (['home', 'detail', 'addresses'].includes(view) && !document.querySelector('.bsheet')) render(); }, 20000);
+// Тривоги: оновлюємо раз на 20 с лише коли вкладка відкрита й видима (економія ліміту й батареї)
+setInterval(async () => { if (document.hidden || !['alerts', 'alert-settings'].includes(view)) return; await fetchAlerts(true); checkSiren(); if (!document.querySelector('.bsheet')) render(); }, 20000);
 // Відкрили застосунок (або повернулися до нього) — тихо просимо сервер перевірити сайти обленерго, щоб не чекати
 // планового збору (раз на 15 хв). Не частіше ніж раз на 3 хв з одного пристрою.
 let lastAutoTick = 0;
 // Щоразу при відкритті застосунку (і поверненні до нього) — свіжа перевірка адрес на сайтах обленерго: аварійні відключення
 function autoRefresh() {
+  if (view === 'alerts') return fetchAlerts(true).then(() => { checkSiren(); render(); });
   if (!S.addresses.length) return render();
   freshAddr = true;
   if (API_READY && Date.now() - lastAutoTick > 180000) { lastAutoTick = Date.now(); refreshNow(); }
@@ -650,6 +686,7 @@ if ('serviceWorker' in navigator) {
   });
 })();
 // Таймер із секундами — оновлюється щосекунди без перерендеру
+setInterval(() => { const el = document.querySelector('[data-asince]'); if (el) el.textContent = hms(Date.now() - +el.dataset.asince); }, 1000);
 setInterval(() => {
   const el = document.querySelector('[data-countdown]'); if (!el) return;
   const left = +el.dataset.countdown - kyivNow().min;

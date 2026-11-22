@@ -148,3 +148,32 @@ test('Хмельницький: черга будинку з подій «Від
   assert.equal(rows.length, 3); assert.equal(rows[0].start, '2026-11-20T15:00');
   assert.deepEqual(hoeQueueFrom(rows), ['6.1', '6.2']);
 });
+
+// ---------- Тривоги ----------
+import { parseUkraineAlarm, parseDimapAlerts, parseDimapTargets, parseRadar, combine, mergeTargets, cityStatus as alertCity } from '../worker/alerts.js';
+test('тривоги: ukrainealarm — райони, області, рівні, цілі', () => {
+  const r = parseUkraineAlarm({ alerts: [
+    { regionName: 'Бучанський район', regionType: 'District', activeAlerts: [{ lastUpdate: '2026-11-22T13:41:00Z', activeAlertLevels: [{ alertLevel: 'yellow' }] }] },
+    { regionName: 'Харківська область', regionType: 'State', activeAlerts: [{ lastUpdate: '2026-11-22T10:00:00Z' }] },
+    { regionName: 'Львівський район', regionType: 'District', activeAlerts: [] }],
+    locations: { targets: [{ id: 7, type: 'shahed', point: { lat: 50.9, lng: 34.8 }, direction: 200, lastUpdate: new Date().toISOString() }] } });
+  assert.deepEqual(r.raions['Бучанський район'][0], 2);
+  assert.equal(r.oblasts['Харківська область'][0], 3);
+  assert.equal(r.raions['Львівський район'], undefined);
+  assert.equal(r.targets[0].k, 'drone'); assert.equal(r.targets[0].b, 200);
+});
+test('тривоги: злиття джерел і цілей (dimap у пріоритеті, ≤10 км ±30° — одна ціль)', () => {
+  const now = Date.now();
+  const dmT = parseDimapTargets({ targets: [{ id: 'a', type: 'missile', lat: 48.5, lng: 35.9, bearing: 10, lastSeen: new Date(now).toISOString() }, { id: 'old', lat: 49, lng: 30, lastSeen: new Date(now - 6 * 60000).toISOString() }] });
+  const ua = { raions: { 'Павлоградський район': [3, 1] }, oblasts: {}, cities: {}, targets: [{ id: 'ua-1', k: 'missile', la: 48.52, lo: 35.92, b: 20, ts: now, src: ['ukrainealarm'] }] };
+  const s = combine({ ua, dmA: parseDimapAlerts([{ region: 'Бучанський район', color: 'yellow' }, { region: 'м. Київ', color: 'red' }]), dmT, rr: parseRadar({ mapZoneStates: { 'Сумський район|x': { alerted: true, level: 'red' } } }) });
+  assert.equal(s.targets.length, 1); assert.deepEqual(s.targets[0].src, ['dimap', 'ukrainealarm']);
+  assert.equal(s.raions['Бучанський район'][0], 2); assert.equal(s.cities['м. Київ'][0], 3);
+  assert.equal(s.raions['Сумський район'][0], 3, 'radarua доповнює райони, яких немає в інших джерелах');
+});
+test('тривоги: стан міста — жовта = тривога, висока загроза поруч', () => {
+  const now = Date.now();
+  const s = { raions: { 'Бучанський район': [2, now - 60000] }, oblasts: {}, cities: {}, targets: [{ k: 'drone', la: 50.55, lo: 30.2, b: 180, ts: now }] };
+  const c = alertCity(s, { k: 'м. Ірпінська', r: 'Бучанський район', o: 'Київська область', la: 50.5124, lo: 30.1238 });
+  assert.equal(c.level, 2); assert.ok(c.high);
+});
