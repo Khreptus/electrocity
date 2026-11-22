@@ -232,7 +232,7 @@ function layers() {
   m.addLayer({ id: 'pin-halo', type: 'circle', source: 'pin', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4.5, 9, 9, 16], 'circle-color': ['get', 'col'], 'circle-opacity': 0.28 } });
   m.addLayer({ id: 'pin', type: 'circle', source: 'pin', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4.5, 3.5, 9, 6], 'circle-color': '#fff', 'circle-stroke-color': ['get', 'col'], 'circle-stroke-width': 2.5 } });
   m.on('click', 'tg-ic', e => { const id = e.features?.[0]?.properties?.id; if (id) { selected = selected === id ? null : id; clickedTarget = true; frame(); } });
-  m.on('click', () => { if (clickedTarget) { clickedTarget = false; return; } if (selected) { selected = null; frame(); } });
+  m.on('click', e => { if (picking) { pickAt(e.lngLat); return; } if (clickedTarget) { clickedTarget = false; return; } if (selected) { selected = null; frame(); } });
   m.on('mouseenter', 'tg-ic', () => { m.getCanvas().style.cursor = 'pointer'; }); m.on('mouseleave', 'tg-ic', () => { m.getCanvas().style.cursor = ''; });
   m.on('moveend', resetBtn); m.on('zoom', zoomHint);
   ready = true; applySnap(); frame(); zoomHint();
@@ -310,12 +310,40 @@ function infoCard(t, city) {
   box.querySelector('[data-tclose]').onclick = e => { e.stopPropagation(); selected = null; frame(); };
 }
 
+// ---------- Точка на карті вручну (як LocationPicker у віджеті) ----------
+let picking = null;
+const inRingLL = (x, y, r) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+const inFeat = (f, x, y) => f.geometry.coordinates.some(poly => inRingLL(x, y, poly[0]));
+export async function locatePoint(lat, lon) {
+  const hs = await loadHromady();
+  const kyiv = GEOJ?.features.find(f => f.properties.t === 'c' && f.properties.n === 'м. Київ');
+  if (kyiv && inFeat(kyiv, lon, lat)) return { ...cityFromHromada(hs.find(isKyiv), 'Київ'), lat, lon };
+  const r = GEOJ?.features.find(f => f.properties.t === 'r' && inFeat(f, lon, lat));
+  if (!r) return null; // поза Україною
+  const pool = hs.filter(h => h.raion === r.properties.n);
+  const h = (pool.length ? pool : hs).reduce((a, b) => dist(a.lat, a.lon, lat, lon) < dist(b.lat, b.lon, lat, lon) ? a : b);
+  return { ...cityFromHromada(h), lat, lon, manual: true };
+}
+export function startPick(onDone) {
+  picking = onDone; selected = null;
+  const box = mapEl?.querySelector('.mpick'); if (box) box.hidden = false;
+  if (M) M.getCanvas().style.cursor = 'crosshair';
+}
+function stopPick() { picking = null; const box = mapEl?.querySelector('.mpick'); if (box) box.hidden = true; if (M) M.getCanvas().style.cursor = ''; }
+async function pickAt(ll) {
+  const c = await locatePoint(ll.lat, ll.lng);
+  const box = mapEl?.querySelector('.mpick .pt');
+  if (!c) { if (box) box.textContent = 'Ця точка поза межами України — оберіть іншу'; return; }
+  const done = picking; stopPick(); done?.(c);
+}
+
 // Карта живе поза перерендерами екрана: той самий елемент переставляється в новий слот
 export async function mountMap(S) {
   S0 = S; const slot = document.getElementById('amap-slot'); if (!slot) return;
   if (!mapEl) {
     mapEl = document.createElement('div'); mapEl.className = 'amapbox';
-    mapEl.innerHTML = `<div class="amapc"></div><div class="mhint" hidden>Наблизьте карту — з’являться курс і час підльоту цілей</div><button class="mreset" hidden aria-label="Уся Україна">${ic('locate')}</button><div class="tcard" hidden></div>`;
+    mapEl.innerHTML = `<div class="amapc"></div><div class="mhint" hidden>Наблизьте карту — з’являться курс і час підльоту цілей</div><button class="mreset" hidden aria-label="Уся Україна">${ic('locate')}</button><div class="tcard" hidden></div><div class="mpick" hidden><span class="pt">Торкніться карти, щоб поставити свою точку</span><button class="btn sm" data-pickcancel>Скасувати</button></div>`;
+    mapEl.querySelector('[data-pickcancel]').onclick = e => { e.stopPropagation(); stopPick(); };
     slot.append(mapEl);
     try {
       await loadLib();
@@ -329,6 +357,7 @@ export async function mountMap(S) {
       mapEl.querySelector('.mreset').onclick = () => M.fitBounds(UA_BOUNDS, { padding: 6, duration: 500 });
     } catch { mapEl.querySelector('.amapc').innerHTML = '<div class="merr">Не вдалося завантажити карту. Перевірте з’єднання.</div>'; }
   } else { slot.append(mapEl); M?.resize(); }
+  if (picking) { const box = mapEl.querySelector('.mpick'); if (box) box.hidden = false; }
   if (ready) { applySnap(); frame(); zoomHint(); }
 }
 export function mapSettingsChanged() { if (ready) { applySnap(); frame(); } }
@@ -380,7 +409,7 @@ export function alertSettingsView(S) {
     .map(x => `<div class="li"><span class="lt">${ic(x.n === 'dimap' ? 'send' : x.n === 'neptun' ? 'globe' : 'shield')}</span><span class="tx"><span class="tt">${x.n}</span><br><span class="st">${x.what}</span></span><span class="val" style="color:${x.ok == null ? 'var(--text-3)' : x.ok ? 'var(--on-ink)' : 'var(--off-ink)'}">${x.ok == null ? '…' : x.ok ? 'Онлайн' : 'Немає зв’язку'}</span></div>`).join('');
   const notifOff = !S.notify.enabled;
   return `<div class="band"><div class="bar"><button class="btn-ic" data-go="alerts" aria-label="Назад">${ic('chevron-left')}</button><span class="ttl">Карта тривог</span><span style="width:40px"></span></div></div><section class="sheet r32">
-   <div class="over">Мій город</div><div class="list"><button class="li" data-act="acity"><span class="lt">${ic('map-pin')}</span><span class="tx"><span class="tt">Місто</span><br><span class="st">${o.city ? esc(o.city.raion === 'Київ' ? 'м. Київ' : `${o.city.raion.replace(' район', ' р-н')} · ${o.city.oblast.replace(' область', ' обл.')}`) : 'Не обрано'}</span></span><span class="val">${esc(o.city?.label || 'Обрати')}</span>${ic('chevron-right', 'chev')}</button></div>
+   <div class="over">Мій город</div><div class="list"><button class="li" data-act="acity"><span class="lt">${ic('map-pin')}</span><span class="tx"><span class="tt">Місто</span><br><span class="st">${o.city ? esc(o.city.raion === 'Київ' ? 'м. Київ' : `${o.city.raion.replace(' район', ' р-н')} · ${o.city.oblast.replace(' область', ' обл.')}`) : 'Не обрано'}</span></span><span class="val">${esc(o.city?.label || 'Обрати')}</span>${ic('chevron-right', 'chev')}</button><button class="li" data-act="apick"><span class="lt">${ic('locate')}</span><span class="tx"><span class="tt">Поставити точку на карті</span><br><span class="st">${o.city?.manual ? 'Зараз: ваша точка · ' + o.city.lat.toFixed(3) + ', ' + o.city.lon.toFixed(3) : 'Точне місце — для відстані й часу підльоту цілей'}</span></span>${ic('chevron-right', 'chev')}</button></div>
    <div class="over">Сповіщення</div><div class="list">${tg('apush', 'bell', 'Тривога в моєму місті', notifOff && o.push ? 'Увімкніть сповіщення в Налаштуваннях' : 'Початок, відбій і небезпека поруч', o.push && !notifOff)}${tg('asiren', 'siren', 'Сирена', 'Коли ціль ближче 35 км від міста', o.siren !== false)}</div>
    <div class="over">На карті</div><div class="list">${tg('atargets', 'send', 'Повітряні цілі', 'Курс, конус на 10 хв і час підльоту при наближенні', o.targets !== false)}${tg('athreat', 'shield', 'Зони загрози', 'Жовті райони, рахуються як тривога', o.threat !== false)}
      <div class="li"><span class="lt">${ic('grid')}</span><span class="tx"><span class="tt">Поділ карти</span></span><div class="seg" style="width:170px">${[['raions', 'Райони'], ['oblasts', 'Області']].map(([k, l]) => `<button data-act="amode" data-v="${k}" aria-pressed="${(o.mode || 'raions') === k}">${l}</button>`).join('')}</div></div></div>
