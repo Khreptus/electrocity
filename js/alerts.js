@@ -207,6 +207,9 @@ function layers() {
   m.addLayer({ id: 'ua-fill-o', type: 'fill', source: 'ua', filter: ['==', ['get', 't'], 'o'], layout: { visibility: 'none' }, paint: { 'fill-color': fillCol, 'fill-opacity': fillOp } }, firstSym);
   m.addLayer({ id: 'ua-city', type: 'fill', source: 'ua', filter: ['==', ['get', 't'], 'c'], paint: { 'fill-color': fillCol, 'fill-opacity': fillOp } }, firstSym);
   m.addLayer({ id: 'ua-line', type: 'line', source: 'ua', filter: ['in', ['get', 't'], ['literal', ['r', 'c']]], paint: { 'line-color': COL.border, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.5, 9, 1.4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], Z1, 1, Z2, 0.4] } }, firstSym);
+  // Усе поза Україною ховаємо під колір фону застосунку
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--stage-bg').trim() || '#1B1B1B';
+  m.addLayer({ id: 'ua-mask', type: 'fill', source: 'ua', filter: ['==', ['get', 't'], 'mask'], paint: { 'fill-color': bg, 'fill-opacity': 1 } });
   m.addLayer({ id: 'ua-obl', type: 'line', source: 'ua', filter: ['==', ['get', 't'], 'o'], paint: { 'line-color': COL.oblast, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.1, 9, 2.6], 'line-opacity': ['interpolate', ['linear'], ['zoom'], Z1, 1, Z2, 0.65] } });
   m.addSource('kyiv', { type: 'geojson', data: { type: 'Feature', properties: { col: COL.idle }, geometry: { type: 'Point', coordinates: [30.52, 50.45] } } });
   m.addLayer({ id: 'kyiv', type: 'circle', source: 'kyiv', maxzoom: Z2, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4.5, 3, 7, 6], 'circle-color': ['get', 'col'], 'circle-stroke-color': COL.oblast, 'circle-stroke-width': 1 } });
@@ -349,10 +352,10 @@ export async function mountMap(S) {
       await loadLib();
       if (!GEOJ) GEOJ = await (await fetch('assets/ua-map.json')).json();
       M = new maplibregl.Map({ container: mapEl.querySelector('.amapc'), style: 'https://tiles.openfreemap.org/styles/dark', bounds: UA_BOUNDS, fitBoundsOptions: { padding: 6 },
-        minZoom: 4, maxZoom: 15, maxBounds: [[16, 41], [46, 55]], dragRotate: false, pitchWithRotate: false, touchPitch: false, renderWorldCopies: false, fadeDuration: 0,
+        minZoom: 4, maxZoom: 15, maxBounds: [[19.5, 42.8], [43, 53.9]], dragRotate: false, pitchWithRotate: false, touchPitch: false, renderWorldCopies: false, fadeDuration: 0,
         attributionControl: { compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>' } });
       M.touchZoomRotate.disableRotation(); M.scrollZoom.setWheelZoomRate(1 / 220); M.keyboard?.disableRotation?.();
-      M.on('load', () => { homeZoom = M.getZoom(); try { layers(); } catch (e) { console.warn('map layers', e); } });
+      M.on('load', () => { homeZoom = M.getZoom(); M.setMinZoom(homeZoom - 0.15); try { layers(); } catch (e) { console.warn('map layers', e); } });
       M.on('error', e => console.warn('map', e?.error?.message || e));
       mapEl.querySelector('.mreset').onclick = () => M.fitBounds(UA_BOUNDS, { padding: 6, duration: 500 });
     } catch { mapEl.querySelector('.amapc').innerHTML = '<div class="merr">Не вдалося завантажити карту. Перевірте з’єднання.</div>'; }

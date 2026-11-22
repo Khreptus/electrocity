@@ -1,5 +1,5 @@
 // Service worker: оболонка — cache-first, графіки — network-first з резервом у кеші.
-const VERSION = 'v0.13.4';
+const VERSION = 'v0.13.5';
 const SHELL = `shell-${VERSION}`;
 const DATA = 'data-v1';
 const FILES = [
@@ -24,7 +24,7 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (/\/assets\/(ua-hromady\.json|ua-map\.json|vendor\/)/.test(url.pathname)) { // карта, громади, MapLibre — завантажуємо раз, далі з кешу
-    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request).then(x => { if (x.ok) { const c = x.clone(); caches.open('geo-v1').then(k => k.put(e.request, c)); } return x; })));
+    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request).then(x => { if (x.ok) { const c = x.clone(); caches.open('geo-v2').then(k => k.put(e.request, c)); } return x; })));
     return;
   }
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request)));
