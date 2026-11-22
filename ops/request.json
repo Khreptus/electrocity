@@ -1,1 +1,9 @@
-{ "action": "check", "n": 3 }
+{
+  "action": "broadcast",
+  "message": {
+    "id": "alerts-map-launch-2026-11-22",
+    "title": "Electrocity",
+    "body": "Ніхао, в додатку доступна карта тривог і цілей. користуйтесь на здоров'я!",
+    "url": "./#alerts"
+  }
+}
