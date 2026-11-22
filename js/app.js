@@ -29,6 +29,10 @@ const dur = m => { m = Math.round(m); const h = Math.floor(m / 60), r = m % 60; 
 const cd = m => { const t = Math.max(0, Math.floor(m * 60)); const h = Math.floor(t / 3600), mm = Math.floor(t % 3600 / 60), ss = t % 60; return [h, mm, ss].map(x => String(x).padStart(2, '0')).join(':'); };
 const addrLine = a => [a.city, a.street && `${a.street}${a.house ? ', ' + a.house : ''}`].filter(Boolean).join(' · ');
 
+// Версія застосунку = версія service worker (видно, чи телефон уже оновився)
+let APPVER = '';
+if ('caches' in window) caches.keys().then(k => { const v = k.find(x => x.startsWith('shell-'))?.slice(6); if (v) { APPVER = v; const el = document.getElementById('appver'); if (el) el.textContent = v; } }).catch(() => {});
+
 // ---------- Тема ----------
 function applyTheme() {
   const dark = S.theme === 'dark' || (S.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -347,7 +351,7 @@ function settings() {
    <div class="over">Вигляд</div><div class="list">${li('theme', 'moon', 'Тема', null, th)}${li('lang', 'globe', 'Мова', null, `<span data-noi18n>${LANGS[S.lang]}</span>`)}</div>
    <div class="over">Віджет</div><div class="list"><a class="li" href="widget/"><span class="lt">${ic('grid')}</span><span class="tx"><span class="tt">Віджет для iPhone</span><br><span class="st">Статус і таймер на головному екрані</span></span>${ic('chevron-right', 'chev')}</a></div>
    <div class="over">Дані</div><div class="list">${li('sources', 'shield', 'Джерела даних', 'Офіційні оператори')}${li('clearcache', 'database', 'Оновити графіки', 'Скинути збережені дані графіків', '', '')}</div>
-   <div class="over">Про застосунок</div><div class="list">${li('noop', 'lock', 'Конфіденційність', 'Без акаунта. Адреси зберігаються лише на цьому пристрої', '', '')}${li('noop', 'info', 'Версія', null, '0.1 (бета)', '')}</div></section>`;
+   <div class="over">Про застосунок</div><div class="list">${li('noop', 'lock', 'Конфіденційність', 'Без акаунта. Адреси зберігаються лише на цьому пристрої', '', '')}${li('noop', 'info', 'Версія', null, `<span id="appver">${APPVER || '…'}</span>`, '')}</div></section>`;
 }
 function band(title, back, backTo = 'home') {
   return `<div class="band"><div class="bar">${back ? `<button class="btn-ic" data-go="${backTo}" aria-label="Назад">${ic('chevron-left')}</button>` : '<span></span>'}<span class="ttl">${title}</span><span style="width:40px"></span></div></div>`;
