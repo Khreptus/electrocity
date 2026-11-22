@@ -323,11 +323,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:non
 .astage .live i{width:6px;height:6px;border-radius:50%;background:var(--on)}
 .astage .live.off i{background:var(--possible)}
 .astage .ameta{font-size:12px;font-weight:500;color:var(--stage-text-3);padding:0 4px 8px}
-.amap{width:100%;height:auto;display:block;aspect-ratio:680/453}
-.skel-map{border-radius:20px;background:var(--stage-tile)}
-.amap .apulse{transform-box:fill-box;transform-origin:center;animation:apulse 2s ease-out infinite}
-@keyframes apulse{0%{transform:scale(.6);opacity:.55}100%{transform:scale(1.6);opacity:0}}
-@media (prefers-reduced-motion:reduce){.amap .apulse{animation:none}}
 .astage .acap{font-size:11px;font-weight:500;color:var(--stage-text-3);text-align:center;margin-top:6px}
 .acity{gap:16px;text-align:left;width:100%}
 .acity .arow{display:flex;align-items:center;gap:12px;width:100%}
@@ -353,3 +348,39 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:non
 .trow .tx{flex:1;min-width:0}.trow .tt{font-size:16px;line-height:22px}.trow .st{font-size:12px;font-weight:500;color:var(--text-3)}
 .trow .r{font-size:12px;font-weight:500;color:var(--text-3);flex:none}
 @media (min-width:1024px){.astage{padding-left:max(16px,calc((100% - 760px)/2));padding-right:max(16px,calc((100% - 760px)/2))}}
+
+/* масштаб сторінки пальцями вимкнено (зум — лише в карті) */
+html{touch-action:pan-x pan-y}
+.amapwrap{margin:0 -16px}
+.amapbox{position:relative;width:100%;aspect-ratio:1/.78;max-height:62vh;background:#151517;overflow:hidden}
+.amapc{position:absolute;inset:0;touch-action:none}
+.amapc .maplibregl-ctrl-attrib{font-size:9px;background:rgba(0,0,0,.45)!important;color:#999}
+.amapc .maplibregl-ctrl-attrib a{color:#bbb}
+.merr{display:grid;place-items:center;height:100%;color:var(--stage-text-2);font-size:14px;padding:20px;text-align:center}
+.mreset{position:absolute;right:10px;top:10px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;border:1px solid rgba(255,255,255,.18)}
+.mreset svg.i{width:18px;height:18px}
+.mhint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#ddd;font-size:11px;font-weight:500;padding:5px 10px;border-radius:99px;white-space:nowrap;pointer-events:none}
+.tcard{position:absolute;left:10px;top:10px;width:236px;max-width:calc(100% - 64px);background:rgba(28,28,31,.96);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;color:#fff;box-shadow:0 6px 14px rgba(0,0,0,.4);font-size:11.5px;display:flex;flex-direction:column;gap:5px;z-index:2}
+.tcard .th{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:2px}
+.tcard .ti{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex:none}
+.tcard .tn{flex:1;min-width:0;font-size:13px;line-height:1.2}.tcard .tn small{display:block;font-size:11px;color:rgba(255,255,255,.55)}
+.tcard .tclose{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);display:grid;place-items:center}
+.tcard .tclose svg.i{width:12px;height:12px}
+.tcard .tr{display:flex;justify-content:space-between;gap:12px}.tcard .tr span:first-child{color:rgba(255,255,255,.55)}.tcard .tr span:last-child{text-align:right}
+.acity .tx .h-s{display:block}
+.ainfo{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--text-2);background:var(--surface-2);border-radius:12px;padding:10px 12px}
+.ainfo svg.i{width:16px;height:16px;flex:none;margin-top:1px}
+.trow{width:100%;text-align:left}
+
+/* картка мого міста під час тривоги (Figma: червоний градієнт) */
+.acity.alarm{background:linear-gradient(180deg,#E5484D 0%,#A8222A 100%);color:#fff;box-shadow:0 10px 30px rgba(229,72,77,.35)}
+.acity.alarm .h-s{color:#fff}.acity.alarm .cap3{color:rgba(255,255,255,.72)}
+.acity.alarm .aic.on{background:#FCE3E3;color:#8F1D21}
+.acity.alarm .apill.on{background:#FCE3E3;color:#8F1D21}
+.acity.alarm .atimer .big,.acity.alarm .atimer .nx{color:#fff}
+.acity.alarm .ainfo{background:rgba(255,255,255,.14);color:#fff}
+.acity.alarm .banner.err{background:rgba(0,0,0,.22)}.acity.alarm .banner.err>svg{color:#fff}.acity.alarm .banner .bb{color:rgba(255,255,255,.85)}
+/* пульсація екрана під час тривоги — внутрішня червона тінь по краях */
+.alarm-vignette{position:fixed;inset:0;pointer-events:none;z-index:15;box-shadow:inset 0 0 70px 18px rgba(229,72,77,.55);animation:alarmPulse 2.4s ease-in-out infinite}
+@keyframes alarmPulse{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.alarm-vignette{animation:none;opacity:.6}}

@@ -1,9 +1,9 @@
 // Service worker: оболонка — cache-first, графіки — network-first з резервом у кеші.
-const VERSION = 'v0.13.0';
+const VERSION = 'v0.13.1';
 const SHELL = `shell-${VERSION}`;
 const DATA = 'data-v1';
 const FILES = [
-  './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'js/app.js', 'js/data.js', 'js/icons.js', 'js/address.js', 'js/config.js', 'js/i18n.js', 'js/alerts.js', 'assets/ua-geo.json',
+  './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'js/app.js', 'js/data.js', 'js/icons.js', 'js/address.js', 'js/config.js', 'js/i18n.js', 'js/alerts.js',
   'assets/lamp-on.webp', 'assets/lamp-off.webp', 'icons/icon-192.png', 'icons/icon-180.png', 'icons/favicon.svg',
   'fonts/onest-cyrillic-400-normal.woff2', 'fonts/onest-cyrillic-500-normal.woff2', 'fonts/onest-cyrillic-600-normal.woff2', 'fonts/onest-cyrillic-700-normal.woff2',
   'fonts/onest-latin-400-normal.woff2', 'fonts/onest-latin-500-normal.woff2', 'fonts/onest-latin-600-normal.woff2', 'fonts/onest-latin-700-normal.woff2',
@@ -23,8 +23,8 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match(key).then(r => r || new Response('', { status: 404 }))));
     return;
   }
-  if (url.pathname.endsWith('/assets/ua-hromady.json')) { // список громад — завантажуємо раз, далі з кешу
-    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request).then(x => { if (x.ok) { const c = x.clone(); caches.open(SHELL).then(k => k.put(e.request, c)); } return x; })));
+  if (/\/assets\/(ua-hromady\.json|ua-map\.json|vendor\/)/.test(url.pathname)) { // карта, громади, MapLibre — завантажуємо раз, далі з кешу
+    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request).then(x => { if (x.ok) { const c = x.clone(); caches.open('geo-v1').then(k => k.put(e.request, c)); } return x; })));
     return;
   }
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request)));

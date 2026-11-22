@@ -5,7 +5,7 @@
 // • усе інше — статичні файли застосунку (ASSETS)
 import { parseDtek, parseHoe, parseMoe, SOURCES } from './sources.js';
 import { sendPush, vapidKeys } from './push.js';
-import { getAlerts, alertTick } from './alerts.js';
+import { getAlerts, getTargets, alertTick } from './alerts.js';
 import { hoeAddress, moeAddress, dtekStreet, dtekHouseStatus, addressStatus, DTEK_NAME, DTEK_RUNNER, dtekViaRunner, dtekQueue, dtekStore, PW, pwAddress, choeCities, choeGet, poeCities, poeStreets, poeHouses, poeInfo, poeQueue, hoeLive, hoeQueueFrom } from './outages.js';
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
@@ -38,6 +38,7 @@ export default {
         return d ? new Response(d, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=30', ...CORS } }) : json({ error: 'not found' }, 404);
       }
       // повітряні тривоги: один спільний знімок (кеш 20 с) для всіх — джерела не смикаються з кожного телефона
+      if (p === '/api/targets') return json(await getTargets(), 200, { 'Cache-Control': 'public, max-age=4' });
       if (p === '/api/alerts') { const a = await getAlerts(); return json(a, 200, { 'Cache-Control': 'public, max-age=15' }); }
       if (p === '/api/vapid') return json({ key: (await vapidKeys(env)).publicB64 });
       if (p === '/api/push/subscribe' && req.method === 'POST') return json(await subscribe(env, await req.json()));
