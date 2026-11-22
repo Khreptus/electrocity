@@ -613,7 +613,9 @@ document.addEventListener('click', async e => {
     case 'npush': try {
         if (!S.notify.enabled) { const p = await Notification.requestPermission(); if (p !== 'granted') { notifSheet(); break; } await pushSub(true); S.notify.enabled = true; save(); await syncPush(); toast('Сповіщення увімкнено'); }
         else { const sub = await pushSub(false); if (sub) { await fetch(`${API}api/push/unsubscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); } S.notify.enabled = false; save(); toast('Сповіщення вимкнено'); }
-      } catch (err) { toast('Не вдалося: ' + (err.message || err)); } notifSheet(); render(); break;
+      } catch (err) { const m = String(err.message || err);
+        // «Registration failed - push service error»: на телефоні не працює служба push від Google (браузер Brave, Huawei без Google, вимкнені Google Play Services, VPN/блокувальник)
+        toast(/push service|registration failed/i.test(m) ? 'Телефон не зміг підключитися до служби сповіщень Google. Відкрийте застосунок через Chrome і перевірте, що Google Play Services увімкнені' : 'Не вдалося: ' + m); } notifSheet(); render(); break;
     case 'nlead': S.notify.lead = +t.dataset.v; save(); syncPush(); notifSheet(); break;
     case 'ntype': S.notify.types[t.dataset.k] = S.notify.types[t.dataset.k] === false; save(); syncPush(); notifSheet(); break;
     case 'ntest': { const sub = await pushSub(false); if (!sub) break; const r = await fetch(`${API}api/push/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).then(r => r.json()).catch(() => ({})); toast(r.ok ? 'Надіслано — перевірте сповіщення' : 'Не вдалося надіслати'); break; }
