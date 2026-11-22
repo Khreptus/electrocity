@@ -55,7 +55,8 @@ function trackUpdate(list) {
   for (const src of list || []) { const t = { ...src };
     const f = track.last[t.id];
     if (f) { const dtm = (now - f.time) / 60000, moved = dist(f.lat, f.lon, t.la, t.lo);
-      if (t.b == null && moved > 1.5) t.b = brg(f.lat, f.lon, t.la, t.lo);
+      if (t.b == null && moved > 1.5) t.b = brg(f.lat, f.lon, t.la, t.lo); // курс із фактичного руху
+      if (t.b == null && f.b != null) t.b = f.b; // курс невідомий — лишаємо останній відомий
       let turn = f.turn; if (f.b != null && t.b != null && dtm > 0.05) turn = f.turn * 0.3 + Math.max(-20, Math.min(20, sang(f.b, t.b) / dtm)) * 0.7;
       if (!t.tk) t.tr = turn;
       next[t.id] = moved < 0.15 && dtm < 1 ? { ...f, turn } : { lat: t.la, lon: t.lo, b: t.b, time: now, turn };

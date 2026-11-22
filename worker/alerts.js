@@ -79,7 +79,9 @@ export function parseDimapTargets(root) {
   const list = Array.isArray(root) ? root : root?.targets || [];
   return list.map(t => { const la = num(t, 'lat', 'latitude'), lo = num(t, 'lng', 'lon', 'longitude'); if (la == null || lo == null) return null;
     const type = str(t, 'type', 'kind'); const tr = num(t, '_turn', 'turn');
-    return { id: 'dm-' + (str(t, 'id') || `${la},${lo}`), k: kindOf(type), m: modelName(type), la, lo, b: num(t, 'bearing', 'course', 'direction'), s: num(t, 'speed'), tr: tr ?? 0, tk: tr != null, alt: num(t, 'altitude'), c: Math.max(1, Math.round(num(t, 'count') ?? 1)), ts: time(t, 'lastSeen', 'updatedAt') || Date.now(), src: ['dimap'] }; }).filter(Boolean);
+    const b0 = num(t, 'bearing', 'course', 'direction');
+    // dimap ставить 0, коли курс невідомий — інакше всі такі цілі «дивляться» строго на північ
+    return { id: 'dm-' + (str(t, 'id') || `${la},${lo}`), k: kindOf(type), m: modelName(type), la, lo, b: b0 === 0 ? null : b0, s: num(t, 'speed'), tr: tr ?? 0, tk: tr != null, alt: num(t, 'altitude'), c: Math.max(1, Math.round(num(t, 'count') ?? 1)), ts: time(t, 'lastSeen', 'updatedAt') || Date.now(), src: ['dimap'] }; }).filter(Boolean);
 }
 export function parseNeptun(root) {
   return (root?.threats || []).map(t => {
