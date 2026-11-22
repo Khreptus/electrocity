@@ -250,6 +250,10 @@ function layers() {
   m.on('click', e => { if (picking) { pickAt(e.lngLat); return; } if (clickedTarget) { clickedTarget = false; return; } if (selected) { selected = null; frame(); } });
   m.on('mouseenter', 'tg-ic', () => { m.getCanvas().style.cursor = 'pointer'; }); m.on('mouseleave', 'tg-ic', () => { m.getCanvas().style.cursor = ''; });
   m.on('moveend', resetBtn); m.on('zoom', zoomHint);
+  // наближення пальцями ховає панель; повернення до загального плану — відкриває
+  m.on('zoom', e => { if (!e.originalEvent) return; const z = m.getZoom();
+    if (!drawerCollapsed && z > homeZoom + 0.25) { autoCollapsed = true; setDrawer(true); }
+    else if (drawerCollapsed && autoCollapsed && z <= homeZoom + 0.05) { autoCollapsed = false; setDrawer(false); } });
   ready = true; applySnap(); frame(); zoomHint();
 }
 function resetBtn() { const b = mapEl?.querySelector('.mreset'); if (b && M) b.hidden = M.getZoom() < homeZoom + 0.35; }
@@ -377,6 +381,42 @@ async function pickAt(ll) {
   const done = picking; stopPick(); done?.(c);
 }
 
+// ---------- Висувна нижня панель (як у картографічних застосунках) ----------
+// Карта займає весь екран до панелі вкладок; панель лежить поверх карти й плавно розкривається вгору.
+// На старті панель відкрита, карта вписана над нею. Наближення карти ховає панель (карта стає більшою),
+// повернення до всієї України — знову відкриває.
+let drawerCollapsed = false, autoCollapsed = false;
+export const toggleDrawer = () => { autoCollapsed = false; setDrawer(!drawerCollapsed); };
+export function setDrawer(collapsed) {
+  drawerCollapsed = collapsed;
+  const sh = document.querySelector('.asheet'); if (!sh) return;
+  sh.classList.toggle('collapsed', collapsed);
+  sh.querySelector('.ahandle')?.setAttribute('aria-expanded', String(!collapsed));
+  if (!collapsed) sh.scrollTop = 0;
+}
+let drawerBound = new WeakSet();
+function layoutDrawer() {
+  const sh = document.querySelector('.asheet'), box = mapEl; if (!sh || !box) return;
+  const tabs = document.querySelector('.tabs'); const tabsH = tabs && getComputedStyle(tabs).display !== 'none' ? tabs.offsetHeight : 0;
+  document.documentElement.style.setProperty('--tabs-h', tabsH + 'px');
+  const mobile = innerWidth < 1024;
+  if (mobile) { const top = box.getBoundingClientRect().top + scrollY; box.style.height = Math.max(300, innerHeight - top - tabsH) + 'px'; }
+  else box.style.height = '';
+  // підлаштувати карту під видиму частину (над згорнутою панеллю)
+  if (ready && M.getZoom() <= homeZoom + 0.05) fitHome();
+  if (drawerBound.has(sh)) return; drawerBound.add(sh);
+  let y0 = null, t0 = 0;
+  sh.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; t0 = Date.now(); }, { passive: true });
+  sh.addEventListener('touchend', e => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
+    const col = sh.classList.contains('collapsed');
+    // свайп вгору розкриває; вниз — згортає (лише коли вміст прокручено до верху)
+    if (dy < -35 && col) sh.querySelector('.ahandle')?.click();
+    else if (dy > 35 && !col && sh.scrollTop <= 0 && Date.now() - t0 < 800) sh.querySelector('.ahandle')?.click(); }, { passive: true });
+}
+function peekH() { const sh = document.querySelector('.asheet'); if (!sh || innerWidth >= 1024) return 6; return Math.min(sh.offsetHeight + 8, innerHeight * 0.5); }
+function fitHome(anim) { M.fitBounds(UA_BOUNDS, { padding: { top: 6, left: 6, right: 6, bottom: drawerCollapsed ? 110 : peekH() }, duration: anim ? 500 : 0 }); if (!anim) { homeZoom = M.getZoom(); M.setMinZoom(homeZoom - 0.6); } }
+addEventListener('resize', () => { if (mapEl?.isConnected) layoutDrawer(); });
+
 // Карта живе поза перерендерами екрана: той самий елемент переставляється в новий слот
 export async function mountMap(S) {
   S0 = S; const slot = document.getElementById('amap-slot'); if (!slot) return;
@@ -393,19 +433,14 @@ export async function mountMap(S) {
         attributionControl: { compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>' } });
       M.touchZoomRotate.disableRotation(); M.scrollZoom.setWheelZoomRate(1 / 220); M.keyboard?.disableRotation?.();
       // розмір карти змінюється (плашка сховалась/розкрилась): якщо карту не наближали — знову вписати всю Україну
-      new ResizeObserver(() => { M.resize(); if (ready && M.getZoom() <= homeZoom + 0.05) { M.fitBounds(UA_BOUNDS, { padding: 6, duration: 0 }); M.setMinZoom(Math.min(M.getZoom(), homeZoom) - 0.15); } }).observe(mapEl);
-      M.on('load', () => { homeZoom = M.getZoom(); M.setMinZoom(homeZoom - 0.15); try { layers(); } catch (e) { console.warn('map layers', e); } });
+      new ResizeObserver(() => M.resize()).observe(mapEl);
+      M.on('load', () => { fitHome(); try { layers(); } catch (e) { console.warn('map layers', e); } });
       M.on('error', e => console.warn('map', e?.error?.message || e));
-      mapEl.querySelector('.mreset').onclick = () => M.fitBounds(UA_BOUNDS, { padding: 6, duration: 500 });
+      mapEl.querySelector('.mreset').onclick = () => { if (drawerCollapsed) { autoCollapsed = false; setDrawer(false); } setTimeout(() => fitHome(true), 60); };
     } catch { mapEl.querySelector('.amapc').innerHTML = '<div class="merr">Не вдалося завантажити карту. Перевірте з’єднання.</div>'; }
   } else { slot.append(mapEl); M?.resize(); }
   if (picking) { const box = mapEl.querySelector('.mpick'); if (box) box.hidden = false; }
-  // свайп по плашці: вгору — показати деталі, вниз — сховати
-  const sh = document.querySelector('.asheet');
-  if (sh) { let y0 = null;
-    sh.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
-    sh.addEventListener('touchend', e => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
-      if (Math.abs(dy) > 40 && (dy < 0) === sh.classList.contains('collapsed')) sh.querySelector('.ahandle')?.click(); }, { passive: true }); }
+  layoutDrawer();
   if (ready) { applySnap(); frame(); zoomHint(); }
 }
 export function mapSettingsChanged() { if (ready) { applySnap(); frame(); } }
@@ -436,7 +471,7 @@ export function alertsView(S) {
     const info = [cs.attack, cs.eta != null && cs.eta > 0 ? `${KIND[cs.etaKind] || 'Ціль'} може долетіти за ≈${fmtEta(cs.eta)} (${hhmm(Date.now() + cs.eta * 60000)})` : null].filter(Boolean);
     const high = cs.high ? `<div class="banner err">${ic('alert')}<div><div class="bt">Небезпека для міста</div><div class="bb">${cs.nearest ? `${KIND[cs.nearest.k] || 'Ціль'} ~${Math.round(cs.nearest.d)} км від вас. ` : ''}Будьте в укритті.</div></div></div>`
       : info.length ? `<div class="ainfo">${ic('info')}<span>${esc(info.join(' · '))}</span></div>` : '';
-    cityCard = `<div class="card acity${cs.on ? ' alarm' : ''}"><div class="arow" data-act="acity" role="button" tabindex="0"><span class="aic ${cs.on ? 'on' : 'calm'}">${ic(cs.on ? 'siren' : 'shield')}</span><span class="tx"><span class="h-s">${esc(city.label)}</span><span class="cap3">${esc(city.raion === 'Київ' ? 'м. Київ' : `${city.raion.replace(' район', ' р-н')} · ${city.oblast.replace(' область', ' обл.')}`)}</span></span>${pill}</div>${timer}${high}</div>`;
+    cityCard = `<div class="card acity${cs.on ? ' alarm' : ''}"><div class="arow" data-act="acity" role="button" tabindex="0"><span class="aic ${cs.on ? 'on' : 'calm'}">${ic(cs.on ? 'siren' : 'shield')}</span><span class="tx"><span class="h-s">${esc(city.label)}</span><span class="cap3">${esc(city.raion === 'Київ' ? 'м. Київ' : `${city.raion.replace(' район', ' р-н')} · ${city.oblast.replace(' область', ' обл.')}`)}</span></span>${pill}</div><div class="acol"><div class="acol-in">${timer}${cs.high ? '' : high}</div></div>${cs.high ? high : ''}</div>`;
   }
   const counters = `<div class="acount"><div class="card"><div class="n"><i style="background:var(--off)"></i><span class="mono">${n}</span></div><div class="cap3">${plural(n, 'район', 'райони', 'районів')} у тривозі</div></div><div class="card"><div class="n">${ic('send')}<span class="mono">${nt}</span></div><div class="cap3">${plural(nt, 'повітряна ціль', 'повітряні цілі', 'повітряних цілей')}</div></div></div>`;
   const ref = city || { lat: 50.45, lon: 30.52 };
@@ -448,8 +483,8 @@ export function alertsView(S) {
   const src = `<div class="source ${okAll && live ? 'ok' : 'warn'}">${ic(okAll && live ? 'shield' : 'info')}${!live ? 'Офіційне джерело тривог не відповідає — показуємо останні дані' : okAll ? 'Усі джерела онлайн' : 'Частина джерел не відповідає'} · оновлено ${hhmm(Date.parse(s.at))}</div>`;
   // під час тривоги в моєму місті екран пульсує червоним по краях
   // нижня інформаційна частина ховається вниз — лишається плашка міста зі статусом, решта місця — карті
-  const col = o.collapsed !== false;
-  return (cs.on ? '<div class="alarm-vignette" aria-hidden="true"></div>' : '') + stageHtml + `<section class="sheet asheet${col ? ' collapsed' : ''}"><button class="ahandle" data-act="asheet" aria-label="${col ? 'Показати деталі' : 'Сховати деталі'}" aria-expanded="${!col}"><i></i></button>${cityCard}<div class="amore">${counters}${targets}${src}</div></section>`;
+  const col = drawerCollapsed;
+  return (cs.on ? '<div class="alarm-vignette" aria-hidden="true"></div>' : '') + stageHtml + `<section class="sheet asheet${col ? ' collapsed' : ''}"><button class="ahandle" data-act="asheet" aria-label="${col ? 'Показати деталі' : 'Сховати деталі'}" aria-expanded="${!col}"><i></i></button>${cityCard}<div class="acol amore"><div class="acol-in">${counters}${targets}${src}</div></div></section>`;
 }
 
 export function alertSettingsView(S) {

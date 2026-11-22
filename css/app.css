@@ -389,12 +389,26 @@ html{touch-action:pan-x pan-y}
 .mpick .btn.sm{background:rgba(255,255,255,.12);color:#fff}
 .amapc canvas{background:var(--stage-bg)}
 
-/* Тривоги: нижня частина ховається — лишається плашка міста, карта займає решту екрана */
-.ahandle{align-self:center;width:64px;height:20px;margin:-12px 0 -4px;display:grid;place-items:center;border-radius:10px}
-.ahandle i{width:40px;height:5px;border-radius:3px;background:var(--text-3);opacity:.45}
-.asheet.collapsed .amore,.asheet.collapsed .acity .atimer,.asheet.collapsed .acity .ainfo,.asheet.collapsed .acity .body-s{display:none}
-.asheet.collapsed .acity{gap:0}
-.view:has(.asheet.collapsed) .astage{flex:1}
-.view:has(.asheet.collapsed) .amapwrap{flex:1;display:flex}
-.view:has(.asheet.collapsed) .amapbox{aspect-ratio:auto;max-height:none;flex:1;min-height:260px}
-.view:has(.asheet.collapsed) .asheet{flex:0 0 auto}
+/* Тривоги: висувна панель поверх карти — плавно розкривається вгору */
+.ahandle{align-self:center;width:72px;height:22px;margin:-10px 0 -6px;display:grid;place-items:center;border-radius:11px;flex:none}
+.ahandle i{width:40px;height:5px;border-radius:3px;background:var(--text-3);opacity:.45;transition:opacity .2s}
+.ahandle:active i{opacity:.8}
+.acol{display:grid;grid-template-rows:1fr;opacity:1;transition:grid-template-rows .42s cubic-bezier(.22,.9,.24,1),opacity .3s ease,margin .42s cubic-bezier(.22,.9,.24,1)}
+.acol-in{min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:12px}
+.amore .acol-in{padding-bottom:4px}
+.asheet.collapsed .acol{grid-template-rows:0fr;opacity:0}
+.asheet.collapsed .amore{margin-top:-12px}
+.acity .acol-in{gap:16px}
+.acity .acol{margin-top:0}
+.asheet.collapsed .acity .acol{margin-top:-16px}
+.atargets{padding:16px 16px 8px}
+.atargets .row-head{margin:0 0 6px}
+@media (max-width:1023px){
+  .astage{padding-bottom:0}
+  .amapwrap{margin:0 -16px}
+  .amapbox{aspect-ratio:auto;max-height:none}
+  .asheet{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--tabs-h,84px);width:100%;max-width:520px;margin:0;z-index:12;
+    border-radius:32px 32px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.28);max-height:min(46dvh,calc(100dvh - var(--tabs-h,84px) - var(--safe-t) - 96px));
+    overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;flex:none;padding-bottom:14px}
+  .view:has(.asheet){padding-bottom:0}
+}
