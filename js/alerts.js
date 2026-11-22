@@ -250,6 +250,7 @@ function layers() {
   m.on('click', e => { if (picking) { pickAt(e.lngLat); return; } if (clickedTarget) { clickedTarget = false; return; } if (selected) { selected = null; frame(); } });
   m.on('mouseenter', 'tg-ic', () => { m.getCanvas().style.cursor = 'pointer'; }); m.on('mouseleave', 'tg-ic', () => { m.getCanvas().style.cursor = ''; });
   m.on('moveend', resetBtn); m.on('zoom', zoomHint);
+  m.on('movestart', e => { if (e.originalEvent) userMoved = true; });
   // наближення пальцями ховає панель; повернення до загального плану — відкриває
   m.on('zoom', e => { if (!e.originalEvent) return; const z = m.getZoom();
     if (!drawerCollapsed && z > homeZoom + 0.25) { autoCollapsed = true; setDrawer(true); }
@@ -385,7 +386,7 @@ async function pickAt(ll) {
 // Карта займає весь екран до панелі вкладок; панель лежить поверх карти й плавно розкривається вгору.
 // На старті панель відкрита, карта вписана над нею. Наближення карти ховає панель (карта стає більшою),
 // повернення до всієї України — знову відкриває.
-let drawerCollapsed = false, autoCollapsed = false;
+let drawerCollapsed = false, autoCollapsed = false, userMoved = false;
 export const toggleDrawer = () => { autoCollapsed = false; setDrawer(!drawerCollapsed); };
 export function setDrawer(collapsed) {
   drawerCollapsed = collapsed;
@@ -393,18 +394,20 @@ export function setDrawer(collapsed) {
   sh.classList.toggle('collapsed', collapsed);
   sh.querySelector('.ahandle')?.setAttribute('aria-expanded', String(!collapsed));
   if (!collapsed) sh.scrollTop = 0;
+  // карту не рухали — вписуємо Україну в нову видиму частину
+  if (ready && !userMoved) setTimeout(() => { if (!userMoved) fitHome(true); }, 120);
 }
 let drawerBound = new WeakSet();
 function layoutDrawer() {
-  const sh = document.querySelector('.asheet'), box = mapEl; if (!sh || !box) return;
+  const sh = document.querySelector('.asheet'), box = mapEl; if (!box) return;
   const tabs = document.querySelector('.tabs'); const tabsH = tabs && getComputedStyle(tabs).display !== 'none' ? tabs.offsetHeight : 0;
   document.documentElement.style.setProperty('--tabs-h', tabsH + 'px');
   const mobile = innerWidth < 1024;
   if (mobile) { const top = box.getBoundingClientRect().top + scrollY; box.style.height = Math.max(300, innerHeight - top - tabsH) + 'px'; }
   else box.style.height = '';
-  // підлаштувати карту під видиму частину (над згорнутою панеллю)
-  if (ready && M.getZoom() <= homeZoom + 0.05) fitHome();
-  if (drawerBound.has(sh)) return; drawerBound.add(sh);
+  // карта має знати новий розмір ДО вписування України у видиму частину над панеллю
+  if (ready) { M.resize(); if (!userMoved) fitHome(); }
+  if (!sh || drawerBound.has(sh)) return; drawerBound.add(sh);
   let y0 = null, t0 = 0;
   sh.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; t0 = Date.now(); }, { passive: true });
   sh.addEventListener('touchend', e => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
@@ -414,7 +417,8 @@ function layoutDrawer() {
     else if (dy > 35 && !col && sh.scrollTop <= 0 && Date.now() - t0 < 800) sh.querySelector('.ahandle')?.click(); }, { passive: true });
 }
 function peekH() { const sh = document.querySelector('.asheet'); if (!sh || innerWidth >= 1024) return 6; return Math.min(sh.offsetHeight + 8, innerHeight * 0.5); }
-function fitHome(anim) { M.fitBounds(UA_BOUNDS, { padding: { top: 6, left: 6, right: 6, bottom: drawerCollapsed ? 110 : peekH() }, duration: anim ? 500 : 0 }); if (!anim) { homeZoom = M.getZoom(); M.setMinZoom(homeZoom - 0.6); } }
+function fitHome(anim) { if (anim) userMoved = false; const H = M.getContainer().clientHeight, bottom = Math.min(drawerCollapsed ? 110 : peekH(), Math.max(0, H - 160));
+  M.fitBounds(UA_BOUNDS, { padding: { top: 6, left: 6, right: 6, bottom }, duration: anim ? 500 : 0 }); if (!anim) homeZoom = M.getZoom(); }
 addEventListener('resize', () => { if (mapEl?.isConnected) layoutDrawer(); });
 
 // Карта живе поза перерендерами екрана: той самий елемент переставляється в новий слот
@@ -429,12 +433,12 @@ export async function mountMap(S) {
       await loadLib();
       if (!GEOJ) GEOJ = await (await fetch('assets/ua-map.json')).json();
       M = new maplibregl.Map({ container: mapEl.querySelector('.amapc'), style: 'https://tiles.openfreemap.org/styles/dark', bounds: UA_BOUNDS, fitBoundsOptions: { padding: 6 },
-        minZoom: 4, maxZoom: 15, maxBounds: [[19.5, 42.8], [43, 53.9]], dragRotate: false, pitchWithRotate: false, touchPitch: false, renderWorldCopies: false, fadeDuration: 0,
+        minZoom: 3, maxZoom: 15, maxBounds: [[5, 30], [60, 65]], dragRotate: false, pitchWithRotate: false, touchPitch: false, renderWorldCopies: false, fadeDuration: 0,
         attributionControl: { compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>' } });
       M.touchZoomRotate.disableRotation(); M.scrollZoom.setWheelZoomRate(1 / 220); M.keyboard?.disableRotation?.();
       // розмір карти змінюється (плашка сховалась/розкрилась): якщо карту не наближали — знову вписати всю Україну
       new ResizeObserver(() => M.resize()).observe(mapEl);
-      M.on('load', () => { fitHome(); try { layers(); } catch (e) { console.warn('map layers', e); } });
+      M.on('load', () => { M.resize(); fitHome(); try { layers(); } catch (e) { console.warn('map layers', e); } });
       M.on('error', e => console.warn('map', e?.error?.message || e));
       mapEl.querySelector('.mreset').onclick = () => { if (drawerCollapsed) { autoCollapsed = false; setDrawer(false); } setTimeout(() => fitHome(true), 60); };
     } catch { mapEl.querySelector('.amapc').innerHTML = '<div class="merr">Не вдалося завантажити карту. Перевірте з’єднання.</div>'; }
