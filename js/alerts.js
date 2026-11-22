@@ -110,16 +110,16 @@ export async function searchCity(q) {
 }
 
 // ---------- Дані ----------
-let SNAP = null, snapAt = 0, inflight = null, TG = [];
+let SNAP = null, snapAt = 0, inflight = null, TG = [], tgAt = 0;
 export const lastSnap = () => SNAP;
 export async function fetchAlerts(force) {
   if (!force && SNAP && Date.now() - snapAt < 15000) return SNAP;
   if (inflight) return inflight;
-  inflight = (async () => { try { const r = await fetch(`${API}api/alerts`, { cache: 'no-store' }); if (r.ok) { SNAP = await r.json(); snapAt = Date.now(); TG = trackUpdate(SNAP.targets); applySnap(); } } catch {} finally { inflight = null; } return SNAP; })();
+  inflight = (async () => { try { const r = await fetch(`${API}api/alerts`, { cache: 'no-store' }); if (r.ok) { const j = await r.json(); const dmOk = j.sources?.find(x => x.n === 'dimap')?.ok; if (!dmOk && SNAP && Date.now() - tgAt < 30000) j.targets = SNAP.targets; SNAP = j; snapAt = Date.now(); TG = trackUpdate(SNAP.targets); applySnap(); } } catch {} finally { inflight = null; } return SNAP; })();
   return inflight;
 }
 export async function fetchTargets() { // частіше, лише цілі
-  try { const r = await fetch(`${API}api/targets`, { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.ok && j.targets && SNAP) { SNAP.targets = j.targets; TG = trackUpdate(j.targets); } } catch {}
+  try { const r = await fetch(`${API}api/targets`, { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.ok && j.targets && SNAP) { SNAP.targets = j.targets; tgAt = Date.now(); TG = trackUpdate(j.targets); } } catch {}
 }
 const mergeSt = (a, b) => { if (!a) return b; if (!b) return a; if (b[0] !== a[0]) return b[0] > a[0] ? b : a; const s = [a[1], b[1]].filter(Boolean); return [a[0], s.length ? Math.min(...s) : 0]; };
 export function cityStatus(s, c) {

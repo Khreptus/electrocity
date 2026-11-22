@@ -15,6 +15,8 @@ jobs:
           DTEK_KEY: ${{ secrets.DTEK_KEY }}
         run: |
           API=https://electrocity.slv463991.workers.dev
+          # дочекатися, поки Cloudflare розгорне свіжу версію сервера
+          if [ "${{ github.event_name }}" = "push" ]; then sleep 150; fi
           ACTION=$(jq -r .action ops/request.json)
           if [ "$ACTION" = "broadcast" ]; then
             OUT=$(curl -s -X POST "$API/api/internal/broadcast" -H "X-Key: $DTEK_KEY" -H 'Content-Type: application/json' --data @<(jq '.message' ops/request.json))

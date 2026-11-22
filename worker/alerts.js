@@ -9,7 +9,7 @@ const FRESH = 20, KEEP = 1800; // с: свіжий знімок / запасни
 const CK = 'https://cache.electrocity/alerts-v1', CK_LAST = 'https://cache.electrocity/alerts-last-v1';
 
 async function getJSON(url, site) {
-  const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'uk-UA,uk;q=0.9', Referer: site + '/', Origin: site }, signal: AbortSignal.timeout(8000), cf: { cacheTtl: 0 } });
+  const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'uk-UA,uk;q=0.9', Referer: site + '/', Origin: site }, signal: AbortSignal.timeout(10000), cf: { cacheTtl: 0 } });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const t = await r.text(); if (t.length > 8e6) throw new Error('too big');
   return JSON.parse(t);
@@ -131,16 +131,20 @@ async function collect() {
     run(async () => parseDimapTargets(await getJSON('https://api.dimap.live/api/targets?_refresh=' + Date.now(), 'https://dimap.live'))),
     run(async () => parseNeptun(await getJSON('https://neptun.in.ua/api/v1/threats', 'https://neptun.in.ua'))),
   ]);
-  const snap = combine({ ua: ua[0], dmT: dmT[0], np: np[0] });
+  // dimap іноді не встигає відповісти — тоді беремо його останні цілі (не старші 90 с), щоб цілі не зникали з карти
+  if (!aux) { const a = await caches.default.match(AUX); aux = a ? await a.json() : null; }
+  const now = Date.now();
+  const dmList = dmT[0] || (aux?.dm && now - aux.dm.t < 90000 ? aux.dm.list : null);
+  const snap = combine({ ua: ua[0], dmT: dmList, np: np[0] });
   snap.sources = [
     { n: 'ukrainealarm', ok: !!ua[0], d: ua[1], what: 'Тривоги (офіційні) · уточнення цілей' },
-    { n: 'dimap', ok: !!dmT[0], d: dmT[1], what: 'Повітряні цілі (основне джерело)' },
+    { n: 'dimap', ok: !!dmList, d: dmT[0] ? 'OK' : dmList ? 'OK (дані до 90 с)' : dmT[1], what: 'Повітряні цілі (основне джерело)' },
     { n: 'neptun', ok: !!np[0], d: np[1], what: 'Уточнення цілей: модель, курс' },
   ];
   snap.ok = !!ua[0];
   snap.at = new Date().toISOString();
   // для швидкого оновлення цілей: останні цілі інших сервісів
-  aux = { ua: ua[0]?.targets || aux?.ua || [], np: np[0] || aux?.np || [] };
+  aux = { ua: ua[0]?.targets || aux?.ua || [], np: np[0] || aux?.np || [], dm: dmT[0] ? { t: now, list: dmT[0] } : aux?.dm || null };
   await caches.default.put(AUX, new Response(JSON.stringify(aux), { headers: { 'Cache-Control': 'max-age=600' } })).catch(() => {});
   return snap;
 }
@@ -152,9 +156,10 @@ export async function getTargets() {
   const now = Date.now(); if (tmem && now - tmem.t < 5000) return tmem.s;
   const c = caches.default; const hit = await c.match(CKT);
   if (hit) { const s = await hit.json(); tmem = { t: Date.parse(s.at) || now, s }; return s; }
-  if (!aux) { const a = await c.match(AUX); aux = a ? await a.json() : { ua: [], np: [] }; }
+  if (!aux) { const a = await c.match(AUX); aux = a ? await a.json() : { ua: [], np: [], dm: null }; }
   let dm = null; try { dm = parseDimapTargets(await getJSON('https://api.dimap.live/api/targets?_refresh=' + now, 'https://dimap.live')); } catch {}
   const s = { at: new Date().toISOString(), ok: !!dm, targets: dm ? pickTargets(dm, aux.ua, aux.np) : null };
+  if (dm) { aux.dm = { t: now, list: dm }; await c.put(AUX, new Response(JSON.stringify(aux), { headers: { 'Cache-Control': 'max-age=600' } })).catch(() => {}); }
   if (dm) await c.put(CKT, new Response(JSON.stringify(s), { headers: { 'Cache-Control': 'max-age=5' } })).catch(() => {});
   tmem = { t: now, s }; return s;
 }
