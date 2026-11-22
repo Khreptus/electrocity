@@ -254,7 +254,11 @@ function layers() {
   // наближення пальцями ховає панель; повернення до загального плану — відкриває
   m.on('zoom', e => { if (!e.originalEvent) return; const z = m.getZoom();
     if (!drawerCollapsed && z > homeZoom + 0.25) { autoCollapsed = true; setDrawer(true); }
-    else if (drawerCollapsed && autoCollapsed && z <= homeZoom + 0.05) { autoCollapsed = false; setDrawer(false); } });
+    });
+  // карту повністю зменшили — панель знову відкривається й заповнює порожнє місце внизу, Україна вписується над нею
+  let gesture = false; m.on('zoomstart', e => { gesture = !!e.originalEvent; });
+  m.on('zoomend', () => { const g = gesture; gesture = false; if (!g || !drawerCollapsed || m.getZoom() > homeZoom + 0.06) return;
+    autoCollapsed = false; setDrawer(false); setTimeout(() => fitHome(true), 60); });
   ready = true; applySnap(); frame(); zoomHint();
 }
 function resetBtn() { const b = mapEl?.querySelector('.mreset'); if (b && M) b.hidden = M.getZoom() < homeZoom + 0.35; }
@@ -421,7 +425,7 @@ function peekH() { const sh = document.querySelector('.asheet'); if (!sh || !map
   const mb = mapEl.getBoundingClientRect().bottom, top = sh.classList.contains('collapsed') ? mb - 110 : mb - Math.min(sh.scrollHeight, innerHeight * 0.4 + 0) - 0;
   return Math.max(6, Math.min(mb - Math.min(top, sh.getBoundingClientRect().top) + 10, innerHeight * 0.5)); }
 function fitHome(anim) { if (anim) userMoved = false; const H = M.getContainer().clientHeight, bottom = Math.min(drawerCollapsed ? 110 : peekH(), Math.max(0, H - 160));
-  M.fitBounds(UA_BOUNDS, { padding: { top: 6, left: 6, right: 6, bottom }, duration: anim ? 500 : 0 }); if (!anim) homeZoom = M.getZoom(); }
+  M.fitBounds(UA_BOUNDS, { padding: { top: 6, left: 6, right: 6, bottom }, duration: anim ? 500 : 0 }); if (!anim) { homeZoom = M.getZoom(); M.setMinZoom(homeZoom - 0.02); } } // менше ширини екрана карту не зменшити
 addEventListener('resize', () => { if (mapEl?.isConnected) layoutDrawer(); });
 
 // Карта живе поза перерендерами екрана: той самий елемент переставляється в новий слот
