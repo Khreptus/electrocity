@@ -358,7 +358,7 @@ export async function locatePoint(lat, lon) {
     h = m.find(x => / міська /.test(x.name)) || m[0] || null;
   }
   // інакше: міська громада, якщо її центр поруч (центри сільських громад навколо міста лежать ближче до околиць)
-  if (!h) { const near = cand.filter(x => / міська /.test(x.name) && dist(x.lat, x.lon, lat, lon) < 10); h = near[0] || null; }
+  if (!h) { const near = cand.filter(x => / міська /.test(x.name) && dist(x.lat, x.lon, lat, lon) < 20).sort((a, b) => dist(a.lat, a.lon, lat, lon) - dist(b.lat, b.lon, lat, lon)); h = near[0] || null; }
   if (!h) h = cand.reduce((a, b) => dist(a.lat, a.lon, lat, lon) < dist(b.lat, b.lon, lat, lon) ? a : b);
   return { ...cityFromHromada(h, place && place.d < 8 ? place.name : null), lat, lon, manual: true };
 }
@@ -369,6 +369,8 @@ export function startPick(onDone) {
 }
 function stopPick() { picking = null; const box = mapEl?.querySelector('.mpick'); if (box) box.hidden = true; if (M) M.getCanvas().style.cursor = ''; }
 async function pickAt(ll) {
+  // на загальному плані назви сіл і міст у підложці неповні — спершу наближаємось до точки
+  if (M && M.getZoom() < 8.5) { const t = mapEl?.querySelector('.mpick .pt'); if (t) t.textContent = 'Уточнюємо місце…'; M.easeTo({ center: ll, zoom: 9, duration: 500 }); await new Promise(r => M.once('idle', r)); }
   const c = await locatePoint(ll.lat, ll.lng);
   const box = mapEl?.querySelector('.mpick .pt');
   if (!c) { if (box) box.textContent = 'Ця точка поза межами України — оберіть іншу'; return; }
