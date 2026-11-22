@@ -417,7 +417,7 @@ export function alertsView(S) {
   if (GEOJ) for (const f of GEOJ.features) if (f.properties.t === 'r' && !seen.has(f.properties.n) && (s.oblasts?.[f.properties.o]?.[0] || 0) >= 2) n++;
   const nt = (s.targets || []).reduce((a, t) => a + (t.c || 1), 0);
   const meta = (n ? `${n} ${plural(n, 'район', 'райони', 'районів')} у тривозі` : 'Тривог немає') + ` · ${nt} ${plural(nt, 'ціль', 'цілі', 'цілей')}`;
-  const stageHtml = head(meta) + slot + `<div class="acap">Тривоги: ukrainealarm · Цілі: dimap, ukrainealarm, neptun · Карта: OpenFreeMap</div></section>`;
+  const stageHtml = head(meta) + slot + `</section>`; // джерела — у налаштуваннях карти
 
   let cityCard;
   if (!city) cityCard = `<button class="card acity" data-act="acity"><div class="arow"><span class="aic">${ic('map-pin')}</span><span class="tx"><span class="h-s">Оберіть своє місто</span><span class="cap3">Покажемо, чи є тривога саме у вас</span></span>${ic('chevron-right', 'chev')}</div></button>`;

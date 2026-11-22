@@ -352,7 +352,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:non
 /* масштаб сторінки пальцями вимкнено (зум — лише в карті) */
 html{touch-action:pan-x pan-y}
 .amapwrap{margin:0 -16px}
-.amapbox{position:relative;width:100%;aspect-ratio:1/.7;max-height:62vh;background:var(--stage-bg);overflow:hidden}
+.amapbox{position:relative;width:100%;aspect-ratio:1/.8;max-height:66vh;background:var(--stage-bg);overflow:hidden}
 .amapc,.amapc.maplibregl-map{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .amapc .maplibregl-ctrl-attrib{font-size:9px;background:rgba(0,0,0,.45)!important;color:#999}
 .amapc .maplibregl-ctrl-attrib a{color:#bbb}
