@@ -27,7 +27,7 @@ function dest(p, km, b) { const d = km / R, t = b * rad, f1 = p.lat * rad, l1 = 
 // ---------- Цілі: класи, швидкості, конус курсу (як у віджеті й dimap) ----------
 const KIND = { shahed: 'Шахед', jetShahed: 'Реактивний шахед', geran5: 'Герань-5', cruise: 'Крилата ракета', ballistic: 'Балістика', kab: 'КАБ', aircraft: 'Авіація', helicopter: 'Гелікоптер', recon: 'Розвідувальний БпЛА', fpv: 'FPV', unknown: 'Ціль' };
 const SPEED = { shahed: 185, unknown: 185, jetShahed: 550, geran5: 600, cruise: 800, ballistic: 3000, kab: 400, aircraft: 800, helicopter: 220, recon: 120, fpv: 90 };
-const KCOL = { shahed: '#F5F5F7', jetShahed: '#3D8BFF', geran5: '#FF6A3D', cruise: '#FFD60A', ballistic: '#FF453A', kab: '#BF5AF2', aircraft: '#64D2FF', helicopter: '#64D2FF', recon: '#B4B4BC', fpv: '#30D158', unknown: '#E5E5EA' };
+const KCOL = { shahed: '#F5F5F7', jetShahed: '#8FD8FF', geran5: '#FF6A3D', cruise: '#FFD60A', ballistic: '#FF453A', kab: '#BF5AF2', aircraft: '#5EE6A8', helicopter: '#5EE6A8', recon: '#B4B4BC', fpv: '#30D158', unknown: '#E5E5EA' };
 const coneCol = v => v < 250 ? '#FFD60A' : v < 600 ? '#FF9F0A' : '#FF453A';
 const speedOf = t => (t.s || 0) > 0 ? t.s : SPEED[t.k] || 185;
 const label = t => (t.m || KIND[t.k] || 'Ціль') + (t.c > 1 ? ` ×${t.c}` : '');
