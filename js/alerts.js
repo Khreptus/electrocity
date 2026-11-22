@@ -165,7 +165,7 @@ const SHAPES = {
   // «Шахед-136» / «Герань-2» зверху: тупий ніс, обрізане дельта-крило, кілі на кінцях крил, гвинт позаду
   shahed: [[0, -1], [0.06, -0.96], [0.1, -0.86], [0.1, -0.52], [0.74, 0.5], [0.75, 0.44], [0.82, 0.46], [0.82, 0.86], [0.74, 0.86], [0.72, 0.8], [0.12, 0.72], [0.1, 0.84], [0.22, 0.84], [0.22, 0.9], [0, 0.9]],
   // «Герань-3» (реактивний): гострий ніс, тонше дельта-крило з кілями, двигун-гондола зверху на хвості й сопло
-  jetShahed: [[0, -1], [0.04, -0.93], [0.08, -0.8], [0.09, -0.5], [0.72, 0.5], [0.73, 0.44], [0.8, 0.46], [0.8, 0.84], [0.72, 0.84], [0.7, 0.78], [0.17, 0.7], [0.17, 1.0], [0.12, 1.06], [0, 1.06]],
+  jetShahed: [[0, -1], [0.04, -0.93], [0.08, -0.8], [0.09, -0.5], [0.72, 0.5], [0.73, 0.44], [0.8, 0.46], [0.8, 0.84], [0.72, 0.84], [0.7, 0.78], [0.17, 0.7], [0.17, 0.86], [0.13, 0.9], [0, 0.9]],
   geran5: [[0, -1], [0.1, -0.78], [0.14, -0.4], [0.14, -0.2], [0.82, 0.34], [0.82, 0.46], [0.14, 0.24], [0.14, 0.66], [0.5, 0.98], [0.48, 1.04], [0.1, 0.9], [0, 0.9]],
   cruise: [[0, -1], [0.08, -0.86], [0.11, -0.62], [0.11, -0.06], [0.7, 0.08], [0.7, 0.2], [0.11, 0.14], [0.11, 0.72], [0.36, 0.98], [0.11, 0.94], [0.08, 1], [0, 1]],
   ballistic: [[0, -1], [0.12, -0.72], [0.2, -0.36], [0.2, 0.56], [0.52, 0.98], [0.52, 1.04], [0.18, 0.96], [0, 0.96]],
@@ -192,7 +192,7 @@ function glyphImage(k) {
     x.fillRect(-0.045 * h, -0.8 * h, 0.09 * h, 1.6 * h);
     x.restore(); }
   if (k === 'unknown') { x.fillStyle = '#000'; x.font = `800 ${s * 0.6}px system-ui`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('?', 0, 1); }
-  if (['jetShahed', 'geran5', 'cruise', 'ballistic'].includes(k)) { const fy = (k === 'geran5' ? 0.9 : k === 'ballistic' ? 0.98 : k === 'jetShahed' ? 1.06 : 1) * s / 2; const fg = x.createLinearGradient(0, fy, 0, fy + s * 0.26); fg.addColorStop(0, '#FFE27A'); fg.addColorStop(1, 'rgba(255,106,0,0)'); x.fillStyle = fg; x.beginPath(); x.ellipse(0, fy + s * 0.13, s * 0.07, s * 0.13, 0, 0, 7); x.fill(); }
+  if (['jetShahed', 'geran5', 'cruise', 'ballistic'].includes(k)) { const fy = (k === 'geran5' ? 0.9 : k === 'ballistic' ? 0.98 : k === 'jetShahed' ? 0.9 : 1) * s / 2; const fg = x.createLinearGradient(0, fy, 0, fy + s * 0.26); fg.addColorStop(0, '#FFE27A'); fg.addColorStop(1, 'rgba(255,106,0,0)'); x.fillStyle = fg; x.beginPath(); x.ellipse(0, fy + s * 0.13, s * 0.07, s * 0.13, 0, 0, 7); x.fill(); }
   return { width: c.width, height: c.height, data: x.getImageData(0, 0, c.width, c.height).data };
 }
 const svgGlyph = k => { const pts = symPts(SHAPES[k] || SHAPES.shahed), h = 10; return 'M' + pts.map(q => `${(q[0] * h).toFixed(1)} ${(q[1] * h).toFixed(1)}`).join('L') + 'Z'; };
