@@ -353,7 +353,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:non
 html{touch-action:pan-x pan-y}
 .amapwrap{margin:0 -16px}
 .amapbox{position:relative;width:100%;aspect-ratio:1/.78;max-height:62vh;background:#151517;overflow:hidden}
-.amapc{position:absolute;inset:0;touch-action:none}
+.amapc,.amapc.maplibregl-map{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .amapc .maplibregl-ctrl-attrib{font-size:9px;background:rgba(0,0,0,.45)!important;color:#999}
 .amapc .maplibregl-ctrl-attrib a{color:#bbb}
 .merr{display:grid;place-items:center;height:100%;color:var(--stage-text-2);font-size:14px;padding:20px;text-align:center}
