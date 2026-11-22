@@ -27,7 +27,7 @@ function dest(p, km, b) { const d = km / R, t = b * rad, f1 = p.lat * rad, l1 = 
 // ---------- Цілі: класи, швидкості, конус курсу (як у віджеті й dimap) ----------
 const KIND = { shahed: 'Шахед', jetShahed: 'Реактивний шахед', geran5: 'Герань-5', cruise: 'Крилата ракета', ballistic: 'Балістика', kab: 'КАБ', aircraft: 'Авіація', helicopter: 'Гелікоптер', recon: 'Розвідувальний БпЛА', fpv: 'FPV', unknown: 'Ціль' };
 const SPEED = { shahed: 185, unknown: 185, jetShahed: 550, geran5: 600, cruise: 800, ballistic: 3000, kab: 400, aircraft: 800, helicopter: 220, recon: 120, fpv: 90 };
-const KCOL = { shahed: '#F5F5F7', jetShahed: '#FF9F0A', geran5: '#FF6A3D', cruise: '#FFD60A', ballistic: '#FF453A', kab: '#BF5AF2', aircraft: '#64D2FF', helicopter: '#64D2FF', recon: '#B4B4BC', fpv: '#30D158', unknown: '#E5E5EA' };
+const KCOL = { shahed: '#F5F5F7', jetShahed: '#3D8BFF', geran5: '#FF6A3D', cruise: '#FFD60A', ballistic: '#FF453A', kab: '#BF5AF2', aircraft: '#64D2FF', helicopter: '#64D2FF', recon: '#B4B4BC', fpv: '#30D158', unknown: '#E5E5EA' };
 const coneCol = v => v < 250 ? '#FFD60A' : v < 600 ? '#FF9F0A' : '#FF453A';
 const speedOf = t => (t.s || 0) > 0 ? t.s : SPEED[t.k] || 185;
 const label = t => (t.m || KIND[t.k] || 'Ціль') + (t.c > 1 ? ` ×${t.c}` : '');
@@ -149,8 +149,8 @@ function attackKind(s, c) { // як у віджеті: що за атака за
 
 // ---------- Карта (MapLibre + OpenFreeMap) ----------
 const UA_BOUNDS = [[22.1, 44.35], [40.25, 52.4]];
-// кольори — як у дизайні Electrocity (Figma): тривога #E5484D, загроза #E39A0B
-const COL = { alert: '#E5484D', threat: '#E39A0B', idle: '#2C2C2F', border: '#141416', oblast: '#0B0B0D' };
+// кольори: тривога #E5484D (Figma); загроза — приглушений жовтий, щоб на ній було видно цілі
+const COL = { alert: '#E5484D', threat: '#A8772E', idle: '#2C2C2F', border: '#141416', oblast: '#0B0B0D' };
 const EMPTY = { type: 'FeatureCollection', features: [] };
 let M = null, mapEl = null, ready = false, GEOJ = null, S0 = null, selected = null, loading = null, clickedTarget = false, homeZoom = 5;
 function loadLib() {
