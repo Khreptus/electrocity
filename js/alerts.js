@@ -416,7 +416,10 @@ function layoutDrawer() {
     if (dy < -35 && col) sh.querySelector('.ahandle')?.click();
     else if (dy > 35 && !col && sh.scrollTop <= 0 && Date.now() - t0 < 800) sh.querySelector('.ahandle')?.click(); }, { passive: true });
 }
-function peekH() { const sh = document.querySelector('.asheet'); if (!sh || innerWidth >= 1024) return 6; return Math.min(sh.offsetHeight + 8, innerHeight * 0.5); }
+// скільки карти закриває панель: від верху панелі до низу карти (за фактичним положенням на екрані)
+function peekH() { const sh = document.querySelector('.asheet'); if (!sh || !mapEl || innerWidth >= 1024) return 6;
+  const mb = mapEl.getBoundingClientRect().bottom, top = sh.classList.contains('collapsed') ? mb - 110 : mb - Math.min(sh.scrollHeight, innerHeight * 0.4 + 0) - 0;
+  return Math.max(6, Math.min(mb - Math.min(top, sh.getBoundingClientRect().top) + 10, innerHeight * 0.5)); }
 function fitHome(anim) { if (anim) userMoved = false; const H = M.getContainer().clientHeight, bottom = Math.min(drawerCollapsed ? 110 : peekH(), Math.max(0, H - 160));
   M.fitBounds(UA_BOUNDS, { padding: { top: 6, left: 6, right: 6, bottom }, duration: anim ? 500 : 0 }); if (!anim) homeZoom = M.getZoom(); }
 addEventListener('resize', () => { if (mapEl?.isConnected) layoutDrawer(); });

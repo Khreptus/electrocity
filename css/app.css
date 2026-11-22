@@ -408,7 +408,7 @@ html{touch-action:pan-x pan-y}
   .amapwrap{margin:0 -16px}
   .amapbox{aspect-ratio:auto;max-height:none}
   .asheet{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--tabs-h,84px);width:100%;max-width:520px;margin:0;z-index:12;
-    border-radius:32px 32px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.28);max-height:min(46dvh,calc(100dvh - var(--tabs-h,84px) - var(--safe-t) - 96px));
+    border-radius:32px 32px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.28);max-height:min(40dvh,calc(100dvh - var(--tabs-h,84px) - var(--safe-t) - 96px));
     overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;flex:none;padding-bottom:14px}
   .view:has(.asheet){padding-bottom:0}
 }
