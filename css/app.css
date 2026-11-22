@@ -388,3 +388,13 @@ html{touch-action:pan-x pan-y}
 .mpick .pt{flex:1}
 .mpick .btn.sm{background:rgba(255,255,255,.12);color:#fff}
 .amapc canvas{background:var(--stage-bg)}
+
+/* Тривоги: нижня частина ховається — лишається плашка міста, карта займає решту екрана */
+.ahandle{align-self:center;width:64px;height:20px;margin:-12px 0 -4px;display:grid;place-items:center;border-radius:10px}
+.ahandle i{width:40px;height:5px;border-radius:3px;background:var(--text-3);opacity:.45}
+.asheet.collapsed .amore,.asheet.collapsed .acity .atimer,.asheet.collapsed .acity .ainfo,.asheet.collapsed .acity .body-s{display:none}
+.asheet.collapsed .acity{gap:0}
+.view:has(.asheet.collapsed) .astage{flex:1}
+.view:has(.asheet.collapsed) .amapwrap{flex:1;display:flex}
+.view:has(.asheet.collapsed) .amapbox{aspect-ratio:auto;max-height:none;flex:1;min-height:260px}
+.view:has(.asheet.collapsed) .asheet{flex:0 0 auto}

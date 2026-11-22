@@ -264,7 +264,7 @@ function applySnap() {
     const p = f.properties; let lv = 0;
     if (p.t === 'r') { lv = mergeSt(SNAP.raions?.[p.n], SNAP.oblasts?.[p.o])?.[0] || 0; obl[p.o] = Math.max(obl[p.o] || 0, lv); }
     else if (p.t === 'c') lv = SNAP.cities?.[p.n]?.[0] || 0;
-    if (p.t !== 'o') M.setFeatureState({ source: 'ua', id: f.id }, { lv: shown(lv) });
+    if (p.t === 'r' || p.t === 'c') M.setFeatureState({ source: 'ua', id: f.id }, { lv: shown(lv) });
   }
   for (const f of GEOJ.features) if (f.properties.t === 'o') M.setFeatureState({ source: 'ua', id: f.id }, { lv: shown(Math.max(obl[f.properties.n] || 0, SNAP.oblasts?.[f.properties.n]?.[0] || 0)) });
   const kv = shown(SNAP.cities?.['м. Київ']?.[0] || 0);
@@ -392,12 +392,20 @@ export async function mountMap(S) {
         minZoom: 4, maxZoom: 15, maxBounds: [[19.5, 42.8], [43, 53.9]], dragRotate: false, pitchWithRotate: false, touchPitch: false, renderWorldCopies: false, fadeDuration: 0,
         attributionControl: { compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>' } });
       M.touchZoomRotate.disableRotation(); M.scrollZoom.setWheelZoomRate(1 / 220); M.keyboard?.disableRotation?.();
+      // розмір карти змінюється (плашка сховалась/розкрилась): якщо карту не наближали — знову вписати всю Україну
+      new ResizeObserver(() => { M.resize(); if (ready && M.getZoom() <= homeZoom + 0.05) { M.fitBounds(UA_BOUNDS, { padding: 6, duration: 0 }); M.setMinZoom(Math.min(M.getZoom(), homeZoom) - 0.15); } }).observe(mapEl);
       M.on('load', () => { homeZoom = M.getZoom(); M.setMinZoom(homeZoom - 0.15); try { layers(); } catch (e) { console.warn('map layers', e); } });
       M.on('error', e => console.warn('map', e?.error?.message || e));
       mapEl.querySelector('.mreset').onclick = () => M.fitBounds(UA_BOUNDS, { padding: 6, duration: 500 });
     } catch { mapEl.querySelector('.amapc').innerHTML = '<div class="merr">Не вдалося завантажити карту. Перевірте з’єднання.</div>'; }
   } else { slot.append(mapEl); M?.resize(); }
   if (picking) { const box = mapEl.querySelector('.mpick'); if (box) box.hidden = false; }
+  // свайп по плашці: вгору — показати деталі, вниз — сховати
+  const sh = document.querySelector('.asheet');
+  if (sh) { let y0 = null;
+    sh.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
+    sh.addEventListener('touchend', e => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
+      if (Math.abs(dy) > 40 && (dy < 0) === sh.classList.contains('collapsed')) sh.querySelector('.ahandle')?.click(); }, { passive: true }); }
   if (ready) { applySnap(); frame(); zoomHint(); }
 }
 export function mapSettingsChanged() { if (ready) { applySnap(); frame(); } }
@@ -439,7 +447,9 @@ export function alertsView(S) {
   const okAll = (s.sources || []).every(x => x.ok);
   const src = `<div class="source ${okAll && live ? 'ok' : 'warn'}">${ic(okAll && live ? 'shield' : 'info')}${!live ? 'Офіційне джерело тривог не відповідає — показуємо останні дані' : okAll ? 'Усі джерела онлайн' : 'Частина джерел не відповідає'} · оновлено ${hhmm(Date.parse(s.at))}</div>`;
   // під час тривоги в моєму місті екран пульсує червоним по краях
-  return (cs.on ? '<div class="alarm-vignette" aria-hidden="true"></div>' : '') + stageHtml + `<section class="sheet">${cityCard}${counters}${targets}${src}</section>`;
+  // нижня інформаційна частина ховається вниз — лишається плашка міста зі статусом, решта місця — карті
+  const col = o.collapsed !== false;
+  return (cs.on ? '<div class="alarm-vignette" aria-hidden="true"></div>' : '') + stageHtml + `<section class="sheet asheet${col ? ' collapsed' : ''}"><button class="ahandle" data-act="asheet" aria-label="${col ? 'Показати деталі' : 'Сховати деталі'}" aria-expanded="${!col}"><i></i></button>${cityCard}<div class="amore">${counters}${targets}${src}</div></section>`;
 }
 
 export function alertSettingsView(S) {

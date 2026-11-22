@@ -633,6 +633,7 @@ document.addEventListener('click', async e => {
     case 'atargets': S.alerts.targets = S.alerts.targets === false; save(); mapSettingsChanged(); render(); break;
     case 'athreat': S.alerts.threat = S.alerts.threat === false; save(); mapSettingsChanged(); render(); break;
     case 'apick': view = 'alerts'; await render(); startPick(c => { S.alerts.city = c; save(); syncPush(); mapSettingsChanged(); render(); toast(`Ваша точка: ${c.label}`); }); document.querySelector('.astage')?.scrollIntoView({ behavior: 'smooth' }); break;
+    case 'asheet': S.alerts.collapsed = S.alerts.collapsed === false; save(); await render(); if (S.alerts.collapsed) window.scrollTo({ top: 0, behavior: 'smooth' }); break;
     case 'amode': S.alerts.mode = t.dataset.v; save(); mapSettingsChanged(); render(); break;
     case 'askperm': if (Notification.permission !== 'granted') { const p = await Notification.requestPermission(); S.notify.enabled = p === 'granted'; save(); } closeSheet(); render(); break;
   }
