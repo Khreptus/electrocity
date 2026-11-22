@@ -59,7 +59,7 @@ export default {
           schedules: Object.fromEntries(Object.entries(st).map(([k, v]) => [k, v.ok ? (v.empty ? 'ok (порожньо)' : 'ok') : 'ПОМИЛКА: ' + v.error])),
           alerts: { ok: a.ok, stale: !!a.stale, at: a.at, raions: Object.keys(a.raions || {}).length, targets: (a.targets || []).length, sources: (a.sources || []).map(x => `${x.n}: ${x.ok ? 'ok' : x.d}`) },
           targetsFast: { ok: t.ok, n: t.targets?.length ?? null },
-          cron: { schedules: await cache('lasttick'), alerts: await cache('lastalerttick') },
+          cron: { schedulesLastPush: (await env.KV.get('lastpush', 'json'))?.at || null, alertsHeartbeat: await env.KV.get('alerttick-hb', 'json'), alertsLocal: await cache('lastalerttick') }, alertstate: await env.KV.get('alertstate', 'json'),
           push: { subs: Object.keys(subs).length, hosts: Object.values(subs).reduce((m, x) => { const h = new URL(x.sub.endpoint).host; m[h] = (m[h] || 0) + 1; return m; }, {}), withAlert: Object.values(subs).filter(x => x.alert?.on).length,
             lastpush: await env.KV.get('lastpush', 'json'), lastpushAddr: await env.KV.get('lastpush-addr', 'json'), lastpushAlert: await env.KV.get('lastpush-alert', 'json'), lastBroadcast: await env.KV.get('broadcast-last', 'json') } });
       }

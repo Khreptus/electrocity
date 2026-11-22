@@ -204,6 +204,8 @@ const mins = ms => { const m = Math.max(1, Math.round(ms / 60000)); return m < 6
 export async function alertTick(env, getSubs, sendPush, localize) {
   const r = await alertTickRun(env, getSubs, sendPush, localize).catch(e => ({ error: String(e?.message || e) }));
   // відмітка «щохвилинна перевірка тривог працює» (Cache API, без витрати ліміту KV)
+  // раз на 10 хв — відмітка в KV (видно з будь-якого місця; ~144 записи на добу)
+  if (new Date().getUTCMinutes() % 10 === 0) await env.KV.put('alerttick-hb', JSON.stringify({ at: new Date().toISOString(), ...r })).catch(() => {});
   await caches.default.put(new Request('https://cache.electrocity/lastalerttick'), new Response(JSON.stringify({ at: new Date().toISOString(), ...r }), { headers: { 'Cache-Control': 'max-age=86400' } })).catch(() => {});
   return r;
 }
