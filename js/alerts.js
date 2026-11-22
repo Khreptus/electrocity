@@ -329,15 +329,38 @@ function infoCard(t, city) {
 let picking = null;
 const inRingLL = (x, y, r) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
 const inFeat = (f, x, y) => f.geometry.coordinates.some(poly => inRingLL(x, y, poly[0]));
+// Найближчий населений пункт із самої підложки OpenFreeMap (шар place): справжня назва міста чи села
+function nearestPlace(lat, lon) {
+  try {
+    const src = Object.entries(M.getStyle().sources).find(([, v]) => v.type === 'vector')?.[0]; if (!src) return null;
+    let best = null;
+    for (const f of M.querySourceFeatures(src, { sourceLayer: 'place' })) {
+      const c = f.properties?.class; if (!['city', 'town', 'village', 'hamlet', 'suburb'].includes(c)) continue;
+      const [x, y] = f.geometry.coordinates; const d = dist(lat, lon, y, x);
+      const w = d / ({ city: 3, town: 2, village: 1, hamlet: 0.8, suburb: 0.8 }[c]); // місто «притягує» сильніше за село поруч
+      if (!best || w < best.w) best = { w, d, name: f.properties['name:uk'] || f.properties.name, cls: c };
+    }
+    return best && best.d < 12 ? best : null;
+  } catch { return null; }
+}
 export async function locatePoint(lat, lon) {
   const hs = await loadHromady();
   const kyiv = GEOJ?.features.find(f => f.properties.t === 'c' && f.properties.n === 'м. Київ');
-  if (kyiv && inFeat(kyiv, lon, lat)) return { ...cityFromHromada(hs.find(isKyiv), 'Київ'), lat, lon };
+  if (kyiv && inFeat(kyiv, lon, lat)) return { ...cityFromHromada(hs.find(isKyiv), 'Київ'), lat, lon, manual: true };
   const r = GEOJ?.features.find(f => f.properties.t === 'r' && inFeat(f, lon, lat));
   if (!r) return null; // поза Україною
-  const pool = hs.filter(h => h.raion === r.properties.n);
-  const h = (pool.length ? pool : hs).reduce((a, b) => dist(a.lat, a.lon, lat, lon) < dist(b.lat, b.lon, lat, lon) ? a : b);
-  return { ...cityFromHromada(h), lat, lon, manual: true };
+  const pool = hs.filter(h => h.raion === r.properties.n); const cand = pool.length ? pool : hs;
+  const place = nearestPlace(lat, lon);
+  let h = null;
+  if (place) { // громада за назвою населеного пункту: «Хмельницький» → «Хмельницька міська громада»
+    const n = place.name.toLowerCase().replace(/[’']/g, ''), stem = n.slice(0, Math.max(3, Math.min(n.length - 2, 7)));
+    const m = cand.filter(x => x.name.toLowerCase().replace(/[’']/g, '').startsWith(stem));
+    h = m.find(x => / міська /.test(x.name)) || m[0] || null;
+  }
+  // інакше: міська громада, якщо її центр поруч (центри сільських громад навколо міста лежать ближче до околиць)
+  if (!h) { const near = cand.filter(x => / міська /.test(x.name) && dist(x.lat, x.lon, lat, lon) < 10); h = near[0] || null; }
+  if (!h) h = cand.reduce((a, b) => dist(a.lat, a.lon, lat, lon) < dist(b.lat, b.lon, lat, lon) ? a : b);
+  return { ...cityFromHromada(h, place && place.d < 8 ? place.name : null), lat, lon, manual: true };
 }
 export function startPick(onDone) {
   picking = onDone; selected = null;
@@ -453,3 +476,4 @@ export function playSiren() {
 }
 // попередній перегляд силуетів (для перевірки дизайну)
 export function glyphPreview(k, bg = '#E39A0B') { const im = glyphImage(k), c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height); const t = document.createElement('canvas'); t.width = im.width; t.height = im.height; t.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(im.data), im.width, im.height), 0, 0); x.drawImage(t, 0, 0); return c.toDataURL(); }
+export const mapInstance = () => M; // для діагностики
