@@ -381,9 +381,10 @@ html{touch-action:pan-x pan-y}
 .acity.alarm .ainfo{background:rgba(255,255,255,.14);color:#fff}
 .acity.alarm .banner.err{background:rgba(0,0,0,.22)}.acity.alarm .banner.err>svg{color:#fff}.acity.alarm .banner .bb{color:rgba(255,255,255,.85)}
 /* пульсація екрана під час тривоги — внутрішня червона тінь по краях */
-.alarm-vignette{position:fixed;inset:0;pointer-events:none;z-index:15;box-shadow:inset 0 0 70px 18px rgba(229,72,77,.55);animation:alarmPulse 2.4s ease-in-out infinite}
-@keyframes alarmPulse{0%,100%{opacity:.35}50%{opacity:1}}
-@media (prefers-reduced-motion:reduce){.alarm-vignette{animation:none;opacity:.6}}
+.alarm-vignette{position:fixed;inset:0;pointer-events:none;z-index:15;box-shadow:inset 0 0 70px 18px rgba(229,72,77,.55);opacity:0;animation:alarmPulse 2.4s ease-in-out 4 forwards}
+.alarm-vignette.seen{display:none}
+@keyframes alarmPulse{0%,100%{opacity:0}50%{opacity:1}} /* ~10 с і зупиняється */
+@media (prefers-reduced-motion:reduce){.alarm-vignette{animation:none;opacity:0}}
 .mpick{position:absolute;left:10px;right:10px;bottom:30px;display:flex;align-items:center;gap:10px;background:rgba(15,16,18,.88);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:10px 12px;color:#fff;font-size:13px;font-weight:500;z-index:3}
 .mpick .pt{flex:1}
 .mpick .btn.sm{background:rgba(255,255,255,.12);color:#fff}

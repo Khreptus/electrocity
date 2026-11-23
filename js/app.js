@@ -2,7 +2,7 @@ import { setLang, LANGS, detectLang, locale, tr } from './i18n.js';
 import { ic, STATE_ICON } from './icons.js';
 import { citySource, streetSource, houseSource, attachTypeahead, dtekAuto, hoeStreetQueue, FILE_ADDR, skel, isYasno, yasnoGroup, isPw, hoeIndex, hoeCity, pq } from './address.js';
 import { API, API_READY } from './config.js';
-import { alertsView, alertSettingsView, fetchAlerts, fetchTargets, lastSnap, citySheetHTML, fillCityList, cityFromHromada, cityKey, guessCity, cityStatus, hms, playSiren, mountMap, mapSettingsChanged, selectTarget, startPick, toggleDrawer } from './alerts.js';
+import { alertsView, alertSettingsView, fetchAlerts, fetchTargets, lastSnap, citySheetHTML, fillCityList, cityFromHromada, cityKey, guessCity, cityStatus, hms, playSiren, mountMap, mapSettingsChanged, selectTarget, startPick, toggleDrawer, resetPulse } from './alerts.js';
 import { REGIONS, region, queueList, kyivNow, addDays, loadSchedule, clearScheduleCache, segmentsFor, stateAt, nextChange, upcomingEvents, isLive, moeAddr, freeDay } from './data.js';
 
 // ---------- Стан ----------
@@ -568,7 +568,7 @@ document.addEventListener('click', async e => {
   const t = e.target.closest('[data-act],[data-go],[data-day],[data-ob]');
   if (!t) return;
   const act = t.dataset.act;
-  if (t.dataset.go) { closeSheet(); view = t.dataset.go; if (view !== 'detail') day = day; return render(); }
+  if (t.dataset.go) { closeSheet(); if (t.dataset.go === 'alerts' && view !== 'alerts' && view !== 'alert-settings') resetPulse(); view = t.dataset.go; if (view !== 'detail') day = day; return render(); }
   if (t.dataset.day) { day = +t.dataset.day; return render(); }
   if (t.dataset.ob) { if (t.dataset.ob === 'back-addresses') { view = 'addresses'; draft = null; } else view = t.dataset.ob; return render(); }
   switch (act) {

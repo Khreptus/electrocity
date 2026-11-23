@@ -393,7 +393,8 @@ async function pickAt(ll) {
 // Карта займає весь екран до панелі вкладок; панель лежить поверх карти й плавно розкривається вгору.
 // На старті панель відкрита, карта вписана над нею. Наближення карти ховає панель (карта стає більшою),
 // повернення до всієї України — знову відкриває.
-let drawerCollapsed = false, autoCollapsed = false, userMoved = false;
+let drawerCollapsed = false, autoCollapsed = false, userMoved = false, pulsedFor = null;
+export const resetPulse = () => { pulsedFor = null; };
 export const toggleDrawer = () => { autoCollapsed = false; setDrawer(!drawerCollapsed); };
 export function setDrawer(collapsed) {
   drawerCollapsed = collapsed;
@@ -498,7 +499,9 @@ export function alertsView(S) {
   // під час тривоги в моєму місті екран пульсує червоним по краях
   // нижня інформаційна частина ховається вниз — лишається плашка міста зі статусом, решта місця — карті
   const col = drawerCollapsed;
-  return (cs.on ? '<div class="alarm-vignette" aria-hidden="true"></div>' : '') + stageHtml + `<section class="sheet asheet${col ? ' collapsed' : ''}"><button class="ahandle" data-act="asheet" aria-label="${col ? 'Показати деталі' : 'Сховати деталі'}" aria-expanded="${!col}"><i></i></button>${cityCard}<div class="acol amore"><div class="acol-in">${counters}${targets}${src}</div></div></section>`;
+  // пульсація ~10 с — лише коли тривога щойно почалась або вкладку щойно відкрили (не при кожному оновленні екрана)
+  const pulse = cs.on && cs.since !== pulsedFor; if (cs.on) pulsedFor = cs.since; else pulsedFor = null;
+  return (pulse ? '<div class="alarm-vignette" aria-hidden="true"></div>' : '') + stageHtml + `<section class="sheet asheet${col ? ' collapsed' : ''}"><button class="ahandle" data-act="asheet" aria-label="${col ? 'Показати деталі' : 'Сховати деталі'}" aria-expanded="${!col}"><i></i></button>${cityCard}<div class="acol amore"><div class="acol-in">${counters}${targets}${src}</div></div></section>`;
 }
 
 export function alertSettingsView(S) {
