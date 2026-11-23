@@ -491,7 +491,7 @@ async function recheckQueues(force) {
   try {
     for (const a of S.addresses) {
       // QFRESH — час, коли з'явилося нове джерело черг; давніші перевірки вважаємо застарілими
-      if (!a.street || !a.house || (!force && Date.now() - (a.qAt || 0) < 7 * 864e5 && (a.qAt || 0) > QFRESH)) continue;
+      if (!a.street || !a.house || (!force && Date.now() - (a.qAt || 0) < 864e5 && (a.qAt || 0) > QFRESH)) continue;
       let q = null; try { q = await lookupQueue(a); } catch { continue; } // джерело недоступне — спробуємо наступного разу
       a.qAt = Date.now(); any = true;
       if (!q || q === a.queue) { delete a.qSuggest; continue; }
@@ -503,6 +503,8 @@ async function recheckQueues(force) {
   if (any) { save(); syncPush(); if (view === 'home') render(); }
 }
 setTimeout(() => recheckQueues(), 4000);
+// раз на добу: при відкритті й поверненні в застосунок (якщо він довго висів у фоні)
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => recheckQueues(), 2000); });
 
 function toast(t) { document.querySelector('.toast')?.remove(); const d = document.createElement('div'); d.className = 'toast'; d.innerHTML = ic('check') + esc(t); document.body.append(d); setTimeout(() => d.remove(), 3500); }
 
