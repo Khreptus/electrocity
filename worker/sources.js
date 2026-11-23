@@ -60,13 +60,15 @@ export function hoeDate(part, today) {
   m = head.match(/(?:^|\D)(\d{1,2})\.(\d{2})(?!\s*[-–—:.]\s*\d)(?:\D|$)/); if (m) return fix(+m[1], +m[2], 0); // «18.11» без року (не час)
   return null;
 }
-export function parseHoe(html) {
+export function parseHoe(html, prevDays = {}) {
   const a = html.search(/За\s+розпорядженням|графік[иі]?\s+погодинних|Підчерга\s+\d/i); if (a < 0) throw new Error('Хмельницькобленерго: графіків на сторінці немає');
   const text = htmlToText(html.slice(Math.max(0, a - 200), a + 30000));
   const today = kyivDate(new Date());
-  const days = {}; const problems = [];
+  const days = {}; const problems = []; const blocks = {}; // дата → блоки в порядку на сторінці (новіші — вище)
   for (const part of text.split(/(?=За\s+розпорядженням)/i)) {
-    const date = hoeDate(part, today); if (!date || days[date]) continue;
+    const date = hoeDate(part, today); if (!date) continue;
+    // «ДОДАТКОВО» — до чинного графіка цього дня додаються години; сам графік лишається в силі
+    const extra = /додатков/i.test(part.slice(0, 600));
     // хвіст рядка обрізаємо на початку наступної черги (кілька черг можуть бути в одному абзаці)
     const cut = r => r.split(/(?:під)?черга\s*№?\s*\d|(?:^|[\s;])\d\s*[.,]\s*\d\s*[-–—:]\s*(?=[\dз])/i)[0];
     // кожна черга — з нового рядка (навіть якщо на сайті вони в одному абзаці)
@@ -74,11 +76,11 @@ export function parseHoe(html) {
     const lines = [...norm.matchAll(QLINE)].map(([, g, sub, rest]) => [`${g}.${sub}`, cut(rest)]).filter(([q]) => SUBQ.includes(q));
     const notApplied = /не\s+(будуть\s+)?застосов|скасован/i.test(part) && !lines.length;
     if (!lines.length) {
-      if (notApplied) { days[date] = Object.fromEntries(SUBQ.map(q => [q, [[0, 1440, 'on']]])); continue; }
+      if (notApplied) { (blocks[date] ||= []).push({ extra: false, day: Object.fromEntries(SUBQ.map(q => [q, [[0, 1440, 'on']]])) }); continue; }
       if (RANGE.test(part)) problems.push(date); RANGE.lastIndex = 0; // години є, а черг не знайшли — формат змінився
       continue;
     }
-    const day = Object.fromEntries(SUBQ.map(q => [q, [[0, 1440, 'on']]]));
+    const day = Object.fromEntries(SUBQ.map(q => [q, [[0, 1440, 'on']]])); const slots = {};
     for (const [q, rest] of lines) {
       const sl = Array(48).fill('on'); let any = false;
       for (const r of rest.matchAll(RANGE)) {
@@ -86,9 +88,24 @@ export function parseHoe(html) {
         if (s >= 1440) continue; any = true;
         for (let t = s; t < (e > s ? e : 1440); t += 30) sl[Math.floor(t / 30)] = 'off';
       }
-      if (any || /немає|без\s+відключ/i.test(rest)) day[q] = slotsToSegs(sl);
+      if (any || /немає|без\s+відключ/i.test(rest)) { day[q] = slotsToSegs(sl); slots[q] = sl; }
     }
-    days[date] = day;
+    (blocks[date] ||= []).push({ extra, day, slots });
+  }
+  // від найстарішого блоку до найновішого: звичайний блок замінює графік дня, «додатково» — додає години відключень
+  for (const [date, list] of Object.entries(blocks)) {
+    // якщо на сторінці лише «додатково», основа — графік цього дня, збережений раніше
+    const pd = prevDays?.[date]; let cur = pd ? { day: { ...pd }, slots: Object.fromEntries(Object.entries(pd).map(([q, v]) => [q, segsToSlots(v)])) } : null;
+    const hasBase = list.some(b => !b.extra);
+    if (hasBase) cur = null;
+    for (const b of [...list].reverse()) {
+      if (!b.extra || !cur) { cur = { day: { ...b.day }, slots: Object.fromEntries(Object.entries(b.slots || {}).map(([q, v]) => [q, [...v]])) }; continue; }
+      for (const [q, sl] of Object.entries(b.slots || {})) {
+        const base = cur.slots[q] || segsToSlots(cur.day[q]);
+        cur.slots[q] = base.map((v, i) => sl[i] === 'off' ? 'off' : v); cur.day[q] = slotsToSegs(cur.slots[q]);
+      }
+    }
+    days[date] = cur.day;
   }
   if (problems.length && !Object.keys(days).length) throw new Error(`Хмельницькобленерго: формат змінився, не розпізнано (${problems.join(', ')})`);
   if (!Object.keys(days).length) throw new Error('Хмельницькобленерго: не розпізнано');
@@ -203,7 +220,7 @@ export const SOURCES = [
     return { operator: op, name, source: { url, kind: 'aggregator', via: file.replace('https://raw.githubusercontent.com/', 'github.com/').replace(/\/main\/.*$/, '') }, ...parseFact(j.fact) };
   } })),
   { op: 'chernoe', fetch: (get, prev) => fetchCv(get, prev) },
-  { op: 'hoe', fetch: async get => ({ operator: 'hoe', name: 'Хмельницькобленерго', source: { url: 'https://hoe.com.ua/page/pogodinni-vidkljuchennja', kind: 'official' }, ...parseHoe(await get('https://hoe.com.ua/page/pogodinni-vidkljuchennja')) }) },
+  { op: 'hoe', fetch: async (get, prev) => ({ operator: 'hoe', name: 'Хмельницькобленерго', source: { url: 'https://hoe.com.ua/page/pogodinni-vidkljuchennja', kind: 'official' }, ...parseHoe(await get('https://hoe.com.ua/page/pogodinni-vidkljuchennja'), prev?.days) }) },
   { op: 'moe', fetch: async get => { const [a, b, c] = await Promise.all([get(`${MOE}/schedule/time-series`), get(`${MOE}/outage-queue/by-type/3`), get(`${MOE}/v2/schedule/active`)]);
     return { operator: 'moe', name: 'Миколаївобленерго', source: { url: 'https://off.energy.mk.ua/', kind: 'official' }, ...parseMoe(JSON.parse(a), JSON.parse(b), JSON.parse(c)) }; } },
 ];
