@@ -135,6 +135,21 @@ export default {
 };
 
 let lastPush = null;
+// ---------- історія за сьогодні ----------
+// past = { date, until, q: { черга: [[від, до, стан], …] } } — як діяв графік до моменту until (хвилини від початку доби)
+export function pastHistory(prev, now) {
+  if (!prev?.days?.[now.date]) return prev?.past?.date === now.date ? prev.past : null;
+  const old = prev.past?.date === now.date ? prev.past : { date: now.date, until: 0, q: {} };
+  const from = old.until || 0; if (now.min <= from) return old;
+  const q = JSON.parse(JSON.stringify(old.q || {}));
+  for (const [queue, segs] of Object.entries(prev.days[now.date])) {
+    const out = q[queue] || [];
+    for (const [a, b, st] of segs) { const x = Math.max(a, from), y = Math.min(b, now.min); if (y <= x) continue;
+      const l = out[out.length - 1]; if (l && l[2] === st && l[1] === x) l[1] = y; else out.push([x, y, st]); }
+    q[queue] = out;
+  }
+  return { date: now.date, until: now.min, q };
+}
 // ---------- збір + сповіщення (раз на 15 хв) ----------
 async function tick(env, manual = false) {
   const now = kyiv();
@@ -161,6 +176,8 @@ async function tick(env, manual = false) {
       const same = prev && JSON.stringify(prev.days) === JSON.stringify(days) && prev.publishedAt === fresh.publishedAt && (prev.notice || null) === (fresh.notice || null);
       if (!same) {
         const next = { ...fresh, days, updatedAt: new Date().toISOString() };
+        // історія дня: те, що вже минуло за попереднім графіком, не зникає після його оновлення
+        const past = pastHistory(prev, now); if (past) next.past = past;
         await env.KV.put('sched:' + src.op, JSON.stringify(next));
         data[src.op] = next;
         if (prev) changes.push(...diff(src.op, prev.days, days, now));

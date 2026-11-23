@@ -130,10 +130,20 @@ export function isFresh(data) {
   return t > 0 && Date.now() - t < 6 * 3600e3;
 }
 export function segmentsFor(data, date, queue) {
-  const segs = data?.days?.[date]?.[queue];
+  const segs = withPast(data, date, queue, data?.days?.[date]?.[queue]);
   if (segs) return segs;
   if (date === kyivNow().date && isFresh(data)) { const none = [[0, 1440, 'on']]; none.none = true; return none; }
   return null;
+}
+// Історія дня: минуле — як діяв графік тоді (сервер зберігає при кожному оновленні), далі — чинний графік
+function withPast(data, date, queue, segs) {
+  const p = data?.past; if (!p || p.date !== date || !p.q?.[queue]) return segs;
+  if (!segs) segs = [[0, 1440, isFresh(data) ? 'on' : 'unknown']]; // на сьогодні графік зняли — минуле все одно показуємо
+  const out = p.q[queue].map(s => [...s]);
+  for (const [a, b, st] of segs) { const x = Math.max(a, p.until); if (b <= x) continue;
+    const l = out[out.length - 1]; if (l && l[2] === st && l[1] === x) l[1] = b; else out.push([x, b, st]); }
+  if (out.length && out[0][0] > 0) out.unshift([0, out[0][0], 'unknown']);
+  return out;
 }
 // Увесь день без відключень (опублікований «порожній» графік або графіків не застосовують)
 export const freeDay = segs => !!segs && segs.length > 0 && segs.every(s => s[2] === 'on');
