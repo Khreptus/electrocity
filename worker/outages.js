@@ -464,8 +464,9 @@ export async function addressStatus(env, params, ctx, nowIso) {
     const live = await hoeLive({ city, street, house }, ctx, env).catch(() => null);
     if (live?.found) {
       const items = live.rows.filter(r => !r.end || !nowIso || r.end > nowIso).map(r => ({
-        // як на сайті обленерго: тип «Аварійне» (зокрема для ГПВ) — аварійне відключення, інакше планове
-        kind: /аварі/i.test(r.type) ? 'emergency' : 'planned',
+        // рядки погодинних відключень (ГПВ) — це сам графік черги, він уже на шкалі; обленерго позначає їх типом «Аварійне»,
+        // але показувати їх як аварію не можна. Аварійні — лише справжні аварійні роботи / ГАВ поза графіком.
+        kind: /погодинн|\bГПВ\b/i.test(r.work) ? 'schedule' : /аварі/i.test(r.type) ? 'emergency' : 'planned',
         reason: r.work, start: r.start, end: r.end, scope: 'house', source: 'Хмельницькобленерго', queue: r.gpv.join(', ') }));
       return { ok: true, supported: true, found: true, checkedAt: new Date().toISOString(), items, queue: live.queues, source: 'Хмельницькобленерго', url: 'https://hoe.com.ua/shutdown/new' };
     }
